@@ -7,6 +7,8 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { getServiceStatusTokens } from "@/lib/api-tokens";
 import { getSessionProfile } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 const endpoint = "/api/v1/service-status";
 
 export default async function ApiInfoPage() {

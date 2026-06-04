@@ -5,6 +5,8 @@ import { NavigationProgress } from "@/components/layout/NavigationProgress";
 import { OfflineSyncProvider } from "@/components/offline/OfflineSyncProvider";
 import { requireProfile } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function MemberLayout({
   children,
 }: {

@@ -1,0 +1,17 @@
+{
+  "name": "TSS Takip",
+  "short_name": "TSS Takip",
+  "description": "Servis kayıt yönetim uygulaması",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#c62828",
+  "theme_color": "#c62828",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

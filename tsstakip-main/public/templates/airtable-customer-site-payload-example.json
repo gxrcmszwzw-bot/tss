@@ -3,12 +3,12 @@
     "organization_id": "00000000-0000-0000-0000-000000000000",
     "record_id": "recExample123",
     "site_code": "SITE-001",
-    "site_name": "Merkez Plaza",
-    "customer_name": "Acme Enerji",
-    "customer_phone": "+905553334455",
-    "address": "Maslak Mah. Büyükdere Cad. No:1",
+    "customer_email": "cari@example.com",
+    "product_name": "Ürün adı",
     "city_name": "İstanbul",
-    "district_name": "Sarıyer",
-    "project_name": "Merkez Dönüşüm"
+    "record_type": "Proje",
+    "contact_person": "Ahmet Yılmaz",
+    "customer_phone": "+905553334455",
+    "created_at": "2026-01-01T10:00:00.000Z"
   }
 ]

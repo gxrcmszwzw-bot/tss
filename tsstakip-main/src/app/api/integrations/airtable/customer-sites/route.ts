@@ -61,8 +61,12 @@ type AirtablePayload = {
   siteName?: string;
   customer_name?: string;
   customerName?: string;
+  customer_email?: string;
+  customerEmail?: string;
   customer_phone?: string;
   customerPhone?: string;
+  contact_person?: string;
+  contactPerson?: string;
   address?: string;
   city_code?: string;
   cityCode?: string;
@@ -72,6 +76,12 @@ type AirtablePayload = {
   districtName?: string;
   project_name?: string;
   projectName?: string;
+  product_name?: string;
+  productName?: string;
+  record_type?: string;
+  recordType?: string;
+  created_at?: string;
+  createdAt?: string;
 };
 
 export async function POST(request: Request) {
@@ -95,12 +105,16 @@ export async function POST(request: Request) {
   for (const row of rows) {
     const organizationId = row.organization_id ?? row.organizationId;
     const siteCode = row.site_code ?? row.siteCode;
-    const customerName = row.customer_name ?? row.customerName;
+    const customerName =
+      row.customer_name ??
+      row.customerName ??
+      row.contact_person ??
+      row.contactPerson;
 
     if (!organizationId || !siteCode || !customerName) {
       return NextResponse.json({
         ok: false,
-        error: "organization_id, site_code ve customer_name gerekli.",
+        error: "organization_id, site_code ve customer_name/contact_person gerekli.",
       }, { status: 400 });
     }
 
@@ -114,7 +128,12 @@ export async function POST(request: Request) {
       cityCode: row.city_code ?? row.cityCode ?? null,
       cityName: row.city_name ?? row.cityName ?? null,
       districtName: row.district_name ?? row.districtName ?? null,
-      projectName: row.project_name ?? row.projectName ?? null,
+      projectName:
+        row.project_name ??
+        row.projectName ??
+        row.product_name ??
+        row.productName ??
+        null,
       airtableRecordId: row.record_id ?? row.recordId ?? null,
     });
 

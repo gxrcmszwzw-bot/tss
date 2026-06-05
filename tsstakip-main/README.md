@@ -71,17 +71,24 @@ Payload tek kayit veya dizi olabilir. Gerekli alanlar:
 
 ```json
 {
-  "organization_id": "uuid",
+  "organization_id": "00000000-0000-0000-0000-000000000000",
+  "record_id": "recExample123",
   "site_code": "SITE-001",
-  "customer_name": "Acme Plaza",
-  "customer_phone": "+90555...",
-  "address": "Adres",
+  "customer_email": "cari@example.com",
+  "product_name": "Urun adi",
   "city_name": "Istanbul",
-  "district_name": "Kadikoy",
-  "project_name": "Merkez Proje",
-  "record_id": "recAirtable123"
+  "record_type": "Proje",
+  "contact_person": "Ahmet Yilmaz",
+  "customer_phone": "+905553334455",
+  "created_at": "2026-01-01T10:00:00.000Z"
 }
 ```
+
+Notlar:
+
+- `contact_person` alani sistemde `customer_name` olarak kullanilir.
+- `product_name` alani sistemde `project_name` olarak kullanilir.
+- `customer_email`, `record_type` ve `created_at` payload'da kabul edilir; mevcut tabloda dogrudan saklanmaz.
 
 ## AI Kuyruk Cron
 

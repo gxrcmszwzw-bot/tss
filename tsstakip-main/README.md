@@ -47,6 +47,10 @@ AIRTABLE_SYNC_SECRET=
 - Finans carpanlari bolge yerine sehir bazli yonetilir.
 - Servis formunda kayitli `site / musteri` secilebilir ve alanlar otomatik dolar.
 - Turkiye il ve ilce listesi uygulama icine sabit veri olarak dahil edilmiştir.
+- Ornek import dosyalari:
+  - `/templates/subcontractor-import-template.csv`
+  - `/templates/customer-site-import-template.csv`
+  - `/templates/airtable-customer-site-payload-example.json`
 
 `Airtable` ile musteri/site senkronu icin:
 

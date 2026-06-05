@@ -196,6 +196,13 @@ export default async function SettingsPage() {
             <p className="text-xs text-foreground/60">
               Excel kolonları: `Firma Adı`, `Sorumlu`, `Telefon`, `Şehir` veya `Şehir Kodu`
             </p>
+            <a
+              className="text-xs font-medium text-accent underline-offset-2 hover:underline"
+              href="/templates/subcontractor-import-template.csv"
+              target="_blank"
+            >
+              Örnek taşeron import şablonunu indir
+            </a>
             <input
               accept=".xlsx,.xls,.csv"
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
@@ -350,10 +357,36 @@ export default async function SettingsPage() {
               />
             </form>
           </div>
+          <div className="mb-4 rounded-lg border border-border bg-panel-muted/40 p-3 text-xs text-foreground/65">
+            <p className="font-medium text-foreground">Airtable entegrasyonu</p>
+            <p className="mt-1">
+              Butonlu senkron için `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, `AIRTABLE_CUSTOMER_SITES_TABLE_ID` tanımlanmalı.
+            </p>
+            <p className="mt-1">
+              Doğrudan webhook/script akışı için endpoint:
+              <code className="ml-1 rounded bg-background px-1.5 py-0.5">/api/integrations/airtable/customer-sites</code>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <a
+                className="font-medium text-accent underline-offset-2 hover:underline"
+                href="/templates/airtable-customer-site-payload-example.json"
+                target="_blank"
+              >
+                Örnek Airtable payload dosyasını indir
+              </a>
+            </div>
+          </div>
           <form action={importCustomerSitesFromExcelAction} className="mb-4 grid gap-2 rounded-lg border border-dashed border-border bg-panel-muted/40 p-3">
             <p className="text-xs text-foreground/60">
               Excel kolonları: `Site Code`, `Customer Name`, `Customer Phone`, `Address`, `Şehir`, `İlçe`, `Project Name`
             </p>
+            <a
+              className="text-xs font-medium text-accent underline-offset-2 hover:underline"
+              href="/templates/customer-site-import-template.csv"
+              target="_blank"
+            >
+              Örnek müşteri/site import şablonunu indir
+            </a>
             <input
               accept=".xlsx,.xls,.csv"
               className="rounded-lg border border-border bg-background px-3 py-2 text-sm"

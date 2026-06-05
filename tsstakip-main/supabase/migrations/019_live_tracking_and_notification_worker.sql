@@ -8,11 +8,11 @@ alter table public.services
   add column if not exists technician_arrived_at timestamptz;
 
 update public.services
-set public_tracking_token = encode(gen_random_bytes(12), 'hex')
+set public_tracking_token = replace(gen_random_uuid()::text, '-', '')
 where public_tracking_token is null;
 
 alter table public.services
-  alter column public_tracking_token set default encode(gen_random_bytes(12), 'hex');
+  alter column public_tracking_token set default replace(gen_random_uuid()::text, '-', '');
 
 create unique index if not exists services_public_tracking_token_key
   on public.services(public_tracking_token);

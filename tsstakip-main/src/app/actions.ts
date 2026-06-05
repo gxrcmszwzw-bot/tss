@@ -950,6 +950,53 @@ export async function createCustomerSiteAction(formData: FormData) {
   revalidatePath("/admin/settings");
 }
 
+export async function importCustomerSitesFromExcelAction(formData: FormData) {
+  const { activeOrganizationId } = await requireAdmin();
+  const file = formData.get("file");
+  if (!activeOrganizationId || !(file instanceof File)) return;
+
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const firstSheet = workbook.SheetNames[0];
+  if (!firstSheet) {
+    redirect("/admin/settings?error=Musteri/site Excel sayfasi bulunamadi.");
+  }
+
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[firstSheet], {
+    defval: "",
+  });
+
+  let processed = 0;
+
+  for (const row of rows) {
+    const siteCode = matchHeader(row, ["site_code", "site id", "site_id", "site kodu"]);
+    const customerName = matchHeader(row, ["customer_name", "customer", "musteri", "müşteri"]);
+    if (!siteCode || !customerName) continue;
+
+    await upsertCustomerSite(activeOrganizationId, {
+      siteCode,
+      siteName: matchHeader(row, ["site_name", "site", "site adı", "site adi"]),
+      customerName,
+      customerPhone: matchHeader(row, ["customer_phone", "phone", "telefon"]),
+      address: matchHeader(row, ["address", "adres"]),
+      cityCode: matchHeader(row, ["city_code", "il kodu", "şehir kodu", "sehir_kodu"]),
+      cityName: matchHeader(row, ["city", "il", "şehir", "sehir"]),
+      districtName: matchHeader(row, ["district", "ilçe", "ilce"]),
+      projectName: matchHeader(row, ["project_name", "project", "proje", "proje adı", "proje adi"]),
+      source: "manual",
+    });
+
+    processed += 1;
+  }
+
+  if (processed === 0) {
+    redirect("/admin/settings?error=Import icin gecerli musteri/site satiri bulunamadi.");
+  }
+
+  revalidatePath("/admin/settings");
+  redirect(`/admin/settings?ok=${encodeURIComponent(`${processed} musteri/site yüklendi.`)}`);
+}
+
 export async function updateCustomerSiteAction(formData: FormData) {
   const { supabase } = await requireAdmin();
   const id = text(formData, "id");

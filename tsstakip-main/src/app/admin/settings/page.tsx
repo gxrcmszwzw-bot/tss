@@ -19,6 +19,7 @@ import {
   deleteProductGroupAction,
   deleteServiceTypeAction,
   deleteSubcontractorAction,
+  importCustomerSitesFromExcelAction,
   importSubcontractorsFromExcelAction,
   syncCustomerSitesFromAirtableAction,
   togglePriorityAction,
@@ -349,6 +350,23 @@ export default async function SettingsPage() {
               />
             </form>
           </div>
+          <form action={importCustomerSitesFromExcelAction} className="mb-4 grid gap-2 rounded-lg border border-dashed border-border bg-panel-muted/40 p-3">
+            <p className="text-xs text-foreground/60">
+              Excel kolonları: `Site Code`, `Customer Name`, `Customer Phone`, `Address`, `Şehir`, `İlçe`, `Project Name`
+            </p>
+            <input
+              accept=".xlsx,.xls,.csv"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              name="file"
+              required
+              type="file"
+            />
+            <SubmitButton
+              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-panel text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
+              label="Excel ile Müşteri / Site Yükle"
+              pendingLabel="Yükleniyor..."
+            />
+          </form>
           <form action={createCustomerSiteAction} className="grid gap-2 md:grid-cols-2">
             <input className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="site_code" placeholder="Site ID / Kod" required />
             <input className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="site_name" placeholder="Site adı" />

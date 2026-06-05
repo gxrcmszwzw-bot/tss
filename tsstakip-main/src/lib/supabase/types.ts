@@ -385,6 +385,13 @@ export type Database = {
           service_latitude: number | null;
           service_longitude: number | null;
           geofence_radius_meters: number;
+          public_tracking_token: string;
+          public_tracking_enabled: boolean;
+          technician_last_latitude: number | null;
+          technician_last_longitude: number | null;
+          technician_last_seen_at: string | null;
+          technician_eta_minutes: number | null;
+          technician_arrived_at: string | null;
           fee_type: FeeType;
           amount: number | null;
           currency: string;
@@ -434,6 +441,13 @@ export type Database = {
           service_latitude?: number | null;
           service_longitude?: number | null;
           geofence_radius_meters?: number;
+          public_tracking_token?: string;
+          public_tracking_enabled?: boolean;
+          technician_last_latitude?: number | null;
+          technician_last_longitude?: number | null;
+          technician_last_seen_at?: string | null;
+          technician_eta_minutes?: number | null;
+          technician_arrived_at?: string | null;
           fee_type?: FeeType;
           amount?: number | null;
           currency?: string;
@@ -819,6 +833,8 @@ export type Database = {
           provider_message_id: string | null;
           provider_response: Json | null;
           error_message: string | null;
+          processing_attempts: number;
+          last_attempt_at: string | null;
           created_at: string;
           sent_at: string | null;
         };
@@ -836,6 +852,8 @@ export type Database = {
           provider_message_id?: string | null;
           provider_response?: Json | null;
           error_message?: string | null;
+          processing_attempts?: number;
+          last_attempt_at?: string | null;
           created_at?: string;
           sent_at?: string | null;
         };

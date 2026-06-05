@@ -4,6 +4,7 @@ import { Camera, ImageIcon, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
+import { enqueueOfflineEntry, storeOfflineAsset } from "@/lib/offline-queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { PhotoType, ServiceStatus } from "@/lib/supabase/types";
 
@@ -37,6 +38,25 @@ export function PhotoCapture({
     setIsUploading(true);
 
     try {
+      if (!navigator.onLine) {
+        const assetId = await storeOfflineAsset(
+          file,
+          file.name,
+          file.type || "image/jpeg",
+        );
+        enqueueOfflineEntry({
+          kind: "service_photo_upload",
+          assetId,
+          payload: {
+            service_id: serviceId,
+            photo_type: photoType,
+          },
+        });
+
+        setMessage("Fotoğraf offline kuyruğa alındı. Bağlantı gelince otomatik yüklenecek.");
+        return;
+      }
+
       const supabase = getSupabaseBrowserClient();
       const {
         data: { user },

@@ -13,10 +13,12 @@ import {
   processPendingPhotoInspectionsAction,
   requestServicePhotoInspectionAction,
   startServiceWithGeofenceAction,
+  updateServiceTrackingSettingsAction,
   updateServiceAction,
   updateServiceStatusAction,
 } from "@/app/actions";
 import { InvoiceUploadField } from "@/components/services/InvoiceUploadField";
+import { LiveLocationPublisher } from "@/components/services/LiveLocationPublisher";
 import { PhotoCapture } from "@/components/services/PhotoCapture";
 import { ServiceForm } from "@/components/services/ServiceForm";
 import { StartServiceButton } from "@/components/services/StartServiceButton";
@@ -173,7 +175,83 @@ export function ServiceDetail({
             <Row label="Başlangıç" value={formatDateTime(service.started_at)} />
             <Row label="Bitiş" value={formatDateTime(service.completed_at)} />
             <Row label="Onay Gönderimi" value={formatDateTime(service.customer_approval_sent_at)} />
+            <Row label="Son Konum" value={formatDateTime(service.technician_last_seen_at)} />
+            <Row
+              label="ETA"
+              value={
+                service.technician_arrived_at
+                  ? "Lokasyona ulaştı"
+                  : service.technician_eta_minutes !== null
+                    ? `${service.technician_eta_minutes} dk`
+                    : "-"
+              }
+            />
           </dl>
+        </Card>
+
+        <Card title="Canlı Takip">
+          <dl className="divide-y divide-border text-sm">
+            <Row label="Public Takip" value={service.public_tracking_enabled ? "Aktif" : "Kapalı"} />
+            <Row
+              label="Takip Linki"
+              value={
+                service.public_tracking_enabled
+                  ? `/track/${service.public_tracking_token}`
+                  : "Henüz aktif değil"
+              }
+            />
+            <Row
+              label="Ekip Konumu"
+              value={
+                service.technician_last_latitude !== null && service.technician_last_longitude !== null
+                  ? `${service.technician_last_latitude.toFixed(5)}, ${service.technician_last_longitude.toFixed(5)}`
+                  : "Henüz paylaşılmadı"
+              }
+            />
+          </dl>
+          {service.public_tracking_enabled ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
+                href={`/track/${service.public_tracking_token}`}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Public Takip Sayfasını Aç
+              </a>
+            </div>
+          ) : null}
+          {role === "admin" ? (
+            <form action={updateServiceTrackingSettingsAction} className="mt-4 grid gap-3 border-t border-border pt-4 md:grid-cols-[1fr_180px_auto]">
+              <input name="service_id" type="hidden" value={service.id} />
+              <label className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground">
+                <input
+                  defaultChecked={service.public_tracking_enabled}
+                  name="public_tracking_enabled"
+                  type="checkbox"
+                />
+                Public takip aktif olsun
+              </label>
+              <Field
+                label="ETA (dk)"
+                name="technician_eta_minutes"
+                type="number"
+                value={service.technician_eta_minutes?.toString()}
+              />
+              <div className="flex items-end">
+                <SubmitButton
+                  className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-panel px-4 text-sm font-semibold text-foreground"
+                  label="Takibi Kaydet"
+                  pendingLabel="Kaydediliyor..."
+                />
+              </div>
+            </form>
+          ) : null}
+          {role === "member" && service.status === "in_progress" ? (
+            <div className="mt-4 border-t border-border pt-4">
+              <LiveLocationPublisher enabled serviceId={service.id} />
+            </div>
+          ) : null}
         </Card>
 
         {service.status === "approved" ? (

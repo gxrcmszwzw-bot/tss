@@ -30,6 +30,15 @@ type TrustScoreResult = {
   signals: Json;
 };
 
+export type RefreshTrustScoresInput = {
+  organizationId: string;
+  subcontractors: Subcontractor[];
+  services: Service[];
+  invoices: ServiceInvoice[];
+  photoInspections: ServicePhotoInspection[];
+  aiAlerts: AiAlert[];
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -142,4 +151,32 @@ export function buildSubcontractorTrustScore(input: {
     alertPenalty: signals.alertPenalty,
     signals,
   };
+}
+
+export function buildTrustScoreBatch(input: RefreshTrustScoresInput) {
+  return input.subcontractors.map((subcontractor) => {
+    const score = buildSubcontractorTrustScore({
+      subcontractor,
+      services: input.services,
+      invoices: input.invoices,
+      photoInspections: input.photoInspections,
+      aiAlerts: input.aiAlerts,
+    });
+
+    return {
+      organization_id: input.organizationId,
+      subcontractor_id: score.subcontractorId,
+      score: score.score,
+      grade: score.grade,
+      service_count: score.serviceCount,
+      completed_count: score.completedCount,
+      on_time_rate: score.onTimeRate,
+      invoice_match_rate: score.invoiceMatchRate,
+      budget_adherence_rate: score.budgetAdherenceRate,
+      quality_score: score.qualityScore,
+      alert_penalty: score.alertPenalty,
+      signals: score.signals,
+      computed_at: new Date().toISOString(),
+    };
+  });
 }

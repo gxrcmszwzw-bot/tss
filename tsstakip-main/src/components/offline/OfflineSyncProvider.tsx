@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import {
   readOfflineQueue,
+  readOfflineAssetAsPayload,
   removeOfflineEntry,
   type OfflineQueueEntry,
   updateOfflineEntry,
@@ -14,6 +15,7 @@ type OfflineSyncContextValue = {
   pendingCount: number;
   isSyncing: boolean;
   lastMessage: string | null;
+  nextRetryAt: string | null;
   syncNow: () => Promise<void>;
   refreshQueue: () => void;
 };
@@ -21,12 +23,19 @@ type OfflineSyncContextValue = {
 const OfflineSyncContext = createContext<OfflineSyncContextValue | null>(null);
 
 async function syncEntry(entry: OfflineQueueEntry) {
+  const assetPayload = entry.assetId
+    ? await readOfflineAssetAsPayload(entry.assetId)
+    : null;
+
   const response = await fetch("/api/offline/sync", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(entry),
+    body: JSON.stringify({
+      ...entry,
+      asset: assetPayload,
+    }),
   });
 
   const payload = (await response.json().catch(() => null)) as
@@ -45,9 +54,16 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
   const [pendingCount, setPendingCount] = useState(() => readOfflineQueue().length);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [nextRetryAt, setNextRetryAt] = useState<string | null>(null);
 
   const refreshQueue = useCallback(() => {
-    setPendingCount(readOfflineQueue().length);
+    const queue = readOfflineQueue();
+    setPendingCount(queue.length);
+    const nextRetry = queue
+      .map((entry) => entry.nextAttemptAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()[0] ?? null;
+    setNextRetryAt(nextRetry);
   }, []);
 
   const syncNow = useCallback(async () => {
@@ -62,17 +78,25 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
 
     setIsSyncing(true);
     let successCount = 0;
+    const now = Date.now();
 
     try {
       for (const entry of queue) {
+        if (entry.nextAttemptAt && new Date(entry.nextAttemptAt).getTime() > now) {
+          continue;
+        }
         try {
           await syncEntry(entry);
-          removeOfflineEntry(entry.id);
+          await removeOfflineEntry(entry);
           successCount += 1;
         } catch (error) {
+          const nextRetryMs = Math.min(30 * 60 * 1000, Math.max(15_000, 2 ** entry.retryCount * 15_000));
+          const nextAttemptAt = new Date(Date.now() + nextRetryMs).toISOString();
           updateOfflineEntry(entry.id, (current) => ({
             ...current,
             retryCount: current.retryCount + 1,
+            nextAttemptAt,
+            lastError: error instanceof Error ? error.message : String(error),
           }));
           setLastMessage(error instanceof Error ? error.message : String(error));
         }
@@ -81,11 +105,12 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
       setIsSyncing(false);
       const remaining = readOfflineQueue().length;
       setPendingCount(remaining);
+      refreshQueue();
       if (successCount > 0) {
         setLastMessage(`${successCount} offline kayıt senkronize edildi.`);
       }
     }
-  }, [isSyncing]);
+  }, [isSyncing, refreshQueue]);
 
   useEffect(() => {
     let initialSyncTimeout: number | null = null;
@@ -129,10 +154,11 @@ export function OfflineSyncProvider({ children }: { children: React.ReactNode })
       pendingCount,
       isSyncing,
       lastMessage,
+      nextRetryAt,
       syncNow,
       refreshQueue,
     }),
-    [isOnline, pendingCount, isSyncing, lastMessage, syncNow, refreshQueue],
+    [isOnline, pendingCount, isSyncing, lastMessage, nextRetryAt, syncNow, refreshQueue],
   );
 
   return (
@@ -152,7 +178,7 @@ export function useOfflineSync() {
 }
 
 function OfflineSyncBanner() {
-  const { isOnline, pendingCount, isSyncing, lastMessage, syncNow } = useOfflineSync();
+  const { isOnline, pendingCount, isSyncing, lastMessage, nextRetryAt, syncNow } = useOfflineSync();
 
   if (isOnline && pendingCount === 0 && !lastMessage) return null;
 
@@ -169,6 +195,11 @@ function OfflineSyncBanner() {
                 ? `${pendingCount} kayıt senkron bekliyor.`
                 : lastMessage ?? "Tüm offline kayıtlar senkronize edildi."}
             </p>
+            {nextRetryAt ? (
+              <p className="mt-1 text-[11px] text-foreground/45">
+                Sonraki retry: {new Date(nextRetryAt).toLocaleTimeString("tr-TR")}
+              </p>
+            ) : null}
           </div>
           {isOnline && pendingCount > 0 ? (
             <button

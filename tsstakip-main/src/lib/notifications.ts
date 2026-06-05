@@ -61,3 +61,111 @@ export async function queueNotificationEvent(input: {
 
   return { queued: deliveries.length };
 }
+
+function resolveNotificationMode() {
+  return (process.env.NOTIFICATION_DELIVERY_MODE ?? "log").trim().toLowerCase();
+}
+
+async function deliverNotification(delivery: {
+  id: string;
+  channel: NotificationChannel;
+  recipient: string;
+  rendered_message: string;
+  processing_attempts: number;
+}) {
+  const mode = resolveNotificationMode();
+
+  if (!delivery.recipient.trim()) {
+    return {
+      status: "failed" as const,
+      errorMessage: "Alici bilgisi bos.",
+      providerResponse: { mode, reason: "missing_recipient" },
+    };
+  }
+
+  if (mode === "disabled") {
+    return {
+      status: "canceled" as const,
+      errorMessage: "Notification delivery mode disabled.",
+      providerResponse: { mode },
+    };
+  }
+
+  const providerMessageId = `${delivery.channel}_${delivery.id}_${Date.now()}`;
+  return {
+    status: "sent" as const,
+    sentAt: new Date().toISOString(),
+    providerMessageId,
+    providerResponse: {
+      mode,
+      channel: delivery.channel,
+      recipient: delivery.recipient,
+      messagePreview: delivery.rendered_message.slice(0, 160),
+      attempts: delivery.processing_attempts + 1,
+    },
+  };
+}
+
+export async function processPendingNotifications(input?: { limit?: number }) {
+  const supabase = getSupabaseAdminClient();
+  const limit = Math.min(Math.max(input?.limit ?? 10, 1), 50);
+
+  const { data: deliveries, error } = await supabase
+    .from("notification_deliveries")
+    .select("id,channel,recipient,rendered_message,processing_attempts,status")
+    .in("status", ["pending", "failed"])
+    .order("created_at", { ascending: true })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  let processed = 0;
+  let sent = 0;
+  let failed = 0;
+  let canceled = 0;
+
+  for (const delivery of deliveries ?? []) {
+    const attemptCount = (delivery.processing_attempts ?? 0) + 1;
+    await supabase
+      .from("notification_deliveries")
+      .update({
+        status: "processing",
+        processing_attempts: attemptCount,
+        last_attempt_at: new Date().toISOString(),
+        error_message: null,
+      })
+      .eq("id", delivery.id);
+
+    const result = await deliverNotification({
+      id: delivery.id,
+      channel: delivery.channel,
+      recipient: delivery.recipient,
+      rendered_message: delivery.rendered_message,
+      processing_attempts: delivery.processing_attempts ?? 0,
+    });
+
+    const { error: updateError } = await supabase
+      .from("notification_deliveries")
+      .update({
+        status: result.status,
+        sent_at: "sentAt" in result ? result.sentAt : null,
+        provider_message_id: "providerMessageId" in result ? result.providerMessageId : null,
+        provider_response: result.providerResponse,
+        error_message: "errorMessage" in result ? result.errorMessage : null,
+      })
+      .eq("id", delivery.id);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+
+    processed += 1;
+    if (result.status === "sent") sent += 1;
+    if (result.status === "failed") failed += 1;
+    if (result.status === "canceled") canceled += 1;
+  }
+
+  return { processed, sent, failed, canceled };
+}

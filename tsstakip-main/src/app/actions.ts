@@ -21,8 +21,8 @@ import {
   processVoiceNoteAnalysis,
 } from "@/lib/ai";
 import { createMemberAccount, deleteMemberAccount, updateMemberProfile } from "@/lib/supabase/members";
-import { queueNotificationEvent } from "@/lib/notifications";
-import { buildSubcontractorTrustScore } from "@/lib/trust-score";
+import { processPendingNotifications, queueNotificationEvent } from "@/lib/notifications";
+import { buildTrustScoreBatch } from "@/lib/trust-score";
 import type {
   FeeType,
   NegotiationStatus,
@@ -342,6 +342,29 @@ export async function startServiceWithGeofenceAction(formData: FormData) {
 
   revalidatePath(`/${profile.role === "admin" ? "admin" : "member"}/services/${id}`);
   revalidatePath(`/${profile.role === "admin" ? "admin" : "member"}`);
+}
+
+export async function updateServiceTrackingSettingsAction(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const serviceId = text(formData, "service_id");
+  if (!serviceId) return;
+
+  const publicTrackingEnabled = bool(formData, "public_tracking_enabled");
+  const technicianEtaMinutes = amount(formData, "technician_eta_minutes");
+
+  const { error } = await supabase
+    .from("services")
+    .update({
+      public_tracking_enabled: publicTrackingEnabled,
+      technician_eta_minutes: technicianEtaMinutes,
+    })
+    .eq("id", serviceId);
+
+  if (error) {
+    redirect(`/admin/services/${serviceId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/admin/services/${serviceId}`);
 }
 
 export async function deleteServiceAction(formData: FormData) {
@@ -839,7 +862,7 @@ export async function createServiceInvoiceAction(formData: FormData) {
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("id,subcontractor_id,approved_cost")
+    .select("id,organization_id,subcontractor_id,subcontractor_phone,customer_name,service_number,approved_cost")
     .eq("id", serviceId)
     .single();
 
@@ -875,6 +898,23 @@ export async function createServiceInvoiceAction(formData: FormData) {
 
   if (serviceUpdateError) {
     redirect(`/admin/services/${serviceId}?error=${encodeURIComponent(serviceUpdateError.message)}`);
+  }
+
+  if (match.status !== "matched") {
+    await queueNotificationEvent({
+      organizationId: service.organization_id,
+      eventKey: "invoice_mismatch_detected",
+      serviceId,
+      subcontractorId: service.subcontractor_id,
+      recipient: service.subcontractor_phone,
+      payload: {
+        customer_name: service.customer_name,
+        service_number: service.service_number,
+        match_reason: match.reason,
+        invoice_amount: invoiceAmount.toString(),
+      },
+      channels: ["whatsapp", "sms"],
+    });
   }
 
   revalidatePath(`/admin/services/${serviceId}`);
@@ -1087,6 +1127,36 @@ export async function markPayoutBatchPaidAction(formData: FormData) {
     redirect(`/admin/services?error=${encodeURIComponent(error.message)}`);
   }
 
+  const { data: paidItems } = await supabase
+    .from("payout_batch_items")
+    .select("service_id")
+    .eq("batch_id", batchId)
+    .in("inclusion_status", ["included", "overridden"]);
+
+  const serviceIds = (paidItems ?? []).map((item) => item.service_id).filter(Boolean);
+  const { data: servicesToNotify } =
+    serviceIds.length > 0
+      ? await supabase
+          .from("services")
+          .select("id,organization_id,service_number,customer_name,subcontractor_id,subcontractor_phone")
+          .in("id", serviceIds)
+      : { data: [] };
+
+  for (const serviceRecord of servicesToNotify ?? []) {
+    await queueNotificationEvent({
+      organizationId: serviceRecord.organization_id,
+      eventKey: "payout_paid",
+      serviceId: serviceRecord.id,
+      subcontractorId: serviceRecord.subcontractor_id,
+      recipient: serviceRecord.subcontractor_phone,
+      payload: {
+        customer_name: serviceRecord.customer_name,
+        service_number: serviceRecord.service_number,
+      },
+      channels: ["whatsapp", "sms"],
+    });
+  }
+
   revalidatePath("/admin/services");
   revalidatePath("/admin/reports");
 }
@@ -1224,6 +1294,15 @@ export async function processPendingPhotoInspectionsAction(formData: FormData) {
   }
 }
 
+export async function processPendingNotificationsAction(formData: FormData) {
+  await requireAdmin();
+  const limit = amount(formData, "limit") ?? 10;
+  const result = await processPendingNotifications({ limit });
+  const message = `Bildirim kuyruğu işlendi. Toplam ${result.processed}, gönderildi ${result.sent}, hata ${result.failed}, iptal ${result.canceled}.`;
+  revalidatePath("/admin");
+  redirect(`/admin?ok=${encodeURIComponent(message)}`);
+}
+
 export async function resolveAiAlertAction(formData: FormData) {
   const { supabase, user } = await requireAdmin();
   const alertId = text(formData, "alert_id");
@@ -1288,34 +1367,18 @@ export async function refreshSubcontractorTrustScoresAction(formData: FormData) 
       supabase.from("ai_alerts").select("*").eq("organization_id", activeOrganizationId),
     ]);
 
-  const subcontractors = subcontractorsResult.data ?? [];
-  const scores = subcontractors.map((subcontractor) =>
-    buildSubcontractorTrustScore({
-      subcontractor,
-      services: servicesResult.data ?? [],
-      invoices: invoicesResult.data ?? [],
-      photoInspections: inspectionsResult.data ?? [],
-      aiAlerts: alertsResult.data ?? [],
-    }),
-  );
+  const rows = buildTrustScoreBatch({
+    organizationId: activeOrganizationId,
+    subcontractors: subcontractorsResult.data ?? [],
+    services: servicesResult.data ?? [],
+    invoices: invoicesResult.data ?? [],
+    photoInspections: inspectionsResult.data ?? [],
+    aiAlerts: alertsResult.data ?? [],
+  });
 
-  if (scores.length > 0) {
+  if (rows.length > 0) {
     const { error } = await supabase.from("subcontractor_trust_scores").upsert(
-      scores.map((score) => ({
-        organization_id: activeOrganizationId,
-        subcontractor_id: score.subcontractorId,
-        score: score.score,
-        grade: score.grade,
-        service_count: score.serviceCount,
-        completed_count: score.completedCount,
-        on_time_rate: score.onTimeRate,
-        invoice_match_rate: score.invoiceMatchRate,
-        budget_adherence_rate: score.budgetAdherenceRate,
-        quality_score: score.qualityScore,
-        alert_penalty: score.alertPenalty,
-        signals: score.signals,
-        computed_at: new Date().toISOString(),
-      })),
+      rows,
       { onConflict: "organization_id,subcontractor_id" },
     );
 

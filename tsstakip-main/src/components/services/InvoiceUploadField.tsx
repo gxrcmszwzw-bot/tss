@@ -3,6 +3,7 @@
 import { FileText, Loader2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { enqueueOfflineEntry, storeOfflineAsset } from "@/lib/offline-queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type InvoiceUploadFieldProps = {
@@ -25,6 +26,45 @@ export function InvoiceUploadField({
     setIsUploading(true);
 
     try {
+      if (!navigator.onLine) {
+        const form = inputRef.current?.form;
+        const invoiceAmount =
+          form?.querySelector<HTMLInputElement>('input[name="invoice_amount"]')?.value ?? "";
+        const invoiceNumber =
+          form?.querySelector<HTMLInputElement>('input[name="invoice_number"]')?.value ?? "";
+        const invoiceDate =
+          form?.querySelector<HTMLInputElement>('input[name="invoice_date"]')?.value ?? "";
+
+        if (!invoiceAmount.trim()) {
+          setMessage("Offline kuyruk icin once fatura tutarini girin.");
+          return;
+        }
+
+        const assetId = await storeOfflineAsset(
+          file,
+          file.name,
+          file.type || "application/pdf",
+        );
+
+        enqueueOfflineEntry({
+          kind: "service_invoice_upload",
+          assetId,
+          payload: {
+            service_id: serviceId,
+            invoice_amount: invoiceAmount,
+            invoice_number: invoiceNumber,
+            invoice_date: invoiceDate,
+            currency:
+              form?.querySelector<HTMLInputElement>('input[name="currency"]')?.value ?? "TRY",
+          },
+        });
+
+        setFileName(file.name);
+        setStoragePath("");
+        setMessage("Fatura offline kuyruğa alındı. Bağlantı gelince otomatik işlenecek.");
+        return;
+      }
+
       const supabase = getSupabaseBrowserClient();
       const ext = (file.name.split(".").pop() || "pdf").toLowerCase();
       const safeExt = ["pdf", "jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "pdf";

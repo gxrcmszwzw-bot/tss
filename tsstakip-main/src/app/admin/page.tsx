@@ -1,6 +1,7 @@
 import {
   createServiceAction,
   processPendingPhotoInspectionsAction,
+  processPendingNotificationsAction,
   processPendingVoiceNotesAction,
   resolveAiAlertAction,
 } from "@/app/actions";
@@ -13,6 +14,8 @@ import {
   aiJobStatusLabels,
   aiRiskLabels,
   formatDateTime,
+  notificationChannelLabels,
+  notificationDeliveryStatusLabels,
   photoInspectionStatusLabels,
   subcontractorTrustGradeLabels,
 } from "@/lib/labels";
@@ -27,6 +30,7 @@ export default async function AdminPage({
   const { supabase, profile } = await requireAdmin();
   const params = await searchParams;
   const hasAiQueueCronSecret = Boolean(process.env.AI_QUEUE_CRON_SECRET?.trim());
+  const hasNotificationCronSecret = Boolean(process.env.NOTIFICATION_CRON_SECRET?.trim());
   const [
     servicesResult,
     productsResult,
@@ -40,6 +44,7 @@ export default async function AdminPage({
     photoInspectionsResult,
     trustScoresResult,
     subcontractorNamesResult,
+    notificationDeliveriesResult,
   ] = await Promise.all([
     supabase.from("services").select("*").order("created_at", { ascending: false }),
     supabase.from("product_groups").select("*").order("name"),
@@ -63,6 +68,12 @@ export default async function AdminPage({
       .limit(8),
     supabase.from("subcontractor_trust_scores").select("*").order("score", { ascending: true }).limit(5),
     supabase.from("subcontractors").select("id,name"),
+    supabase
+      .from("notification_deliveries")
+      .select("*")
+      .in("status", ["pending", "failed", "processing"])
+      .order("created_at", { ascending: true })
+      .limit(8),
   ]);
 
   const services = servicesResult.data ?? [];
@@ -88,6 +99,10 @@ export default async function AdminPage({
   const failedVoiceNotes = voiceQueue.filter((item) => item.processing_status === "failed").length;
   const pendingPhotoInspections = photoQueue.filter((item) => item.status === "pending").length;
   const failedPhotoInspections = photoQueue.filter((item) => item.status === "failed").length;
+  const notificationQueue = notificationDeliveriesResult.data ?? [];
+  const pendingNotifications = notificationQueue.filter((item) => item.status === "pending").length;
+  const failedNotifications = notificationQueue.filter((item) => item.status === "failed").length;
+  const processingNotifications = notificationQueue.filter((item) => item.status === "processing").length;
 
   const stats = [
     { label: "Bugün Açılan", value: todayServices.length },
@@ -170,6 +185,62 @@ export default async function AdminPage({
         <ServiceGroup baseHref="/admin/services" lookup={lookup} services={todayServices} title="Bugün Açılanlar" />
         <ServiceGroup baseHref="/admin/services" lookup={lookup} services={awaiting} title="Onay Bekleyenler" />
         <ServiceGroup baseHref="/admin/services" lookup={lookup} services={urgent} title="Acil Servisler" />
+      </section>
+
+      <section className="mt-5 rounded-xl border border-border bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="font-semibold">Bildirim Kuyruğu</h2>
+            <p className="text-sm text-foreground/55">SMS / WhatsApp teslim kayıtları ve worker durumu</p>
+            <p className="mt-1 text-xs text-foreground/50">
+              Arka plan endpoint: <code>/api/cron/notifications</code> · Secret durumu: {hasNotificationCronSecret ? "hazır" : "eksik"}
+            </p>
+          </div>
+          <form action={processPendingNotificationsAction}>
+            <input name="limit" type="hidden" value="10" />
+            <SubmitButton
+              className="inline-flex items-center justify-center rounded-lg border border-border bg-panel px-4 py-2 text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
+              label="Bildirim Kuyruğunu İşle"
+              pendingLabel="İşleniyor..."
+            />
+          </form>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-border bg-background p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-foreground/45">Toplam</p>
+            <p className="mt-2 text-2xl font-semibold">{notificationQueue.length}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-foreground/45">Bekleyen</p>
+            <p className="mt-2 text-2xl font-semibold">{pendingNotifications}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-foreground/45">İşlenen</p>
+            <p className="mt-2 text-2xl font-semibold">{processingNotifications}</p>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-foreground/45">Hata</p>
+            <p className="mt-2 text-2xl font-semibold">{failedNotifications}</p>
+          </div>
+        </div>
+        {notificationQueue.length > 0 ? (
+          <div className="mt-4 space-y-2">
+            {notificationQueue.map((delivery) => (
+              <div className="rounded-lg border border-border bg-background px-3 py-3 text-sm" key={delivery.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">
+                    {notificationChannelLabels[delivery.channel]} · {delivery.event_key}
+                  </span>
+                  <span className="text-foreground/60">
+                    {notificationDeliveryStatusLabels[delivery.status]}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-foreground/55">{delivery.recipient}</p>
+                <p className="mt-2 line-clamp-2 text-sm text-foreground/70">{delivery.rendered_message}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="mt-5 rounded-xl border border-border bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>

@@ -3,6 +3,7 @@
 import { Loader2, Mic, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { enqueueOfflineEntry, storeOfflineAsset } from "@/lib/offline-queue";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type VoiceNoteUploadFieldProps = {
@@ -25,6 +26,26 @@ export function VoiceNoteUploadField({
     setIsUploading(true);
 
     try {
+      if (!navigator.onLine) {
+        const assetId = await storeOfflineAsset(
+          file,
+          file.name,
+          file.type || "audio/webm",
+        );
+        enqueueOfflineEntry({
+          kind: "service_voice_note_upload",
+          assetId,
+          payload: {
+            service_id: serviceId,
+          },
+        });
+
+        setFileName(file.name);
+        setStoragePath("");
+        setMessage("Ses notu offline kuyruğa alındı. Bağlantı gelince otomatik yüklenecek.");
+        return;
+      }
+
       const supabase = getSupabaseBrowserClient();
       const ext = (file.name.split(".").pop() || "webm").toLowerCase();
       const safeExt = ["mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm"].includes(ext)

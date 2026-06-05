@@ -31,6 +31,7 @@ import type {
   Region,
   Service,
   CatalogItem,
+  CustomerSite,
   ServiceVoiceNote,
   ServiceInvoice,
   ServiceNegotiation,
@@ -69,6 +70,7 @@ type ServiceDetailProps = {
   service: Service;
   products: ProductGroup[];
   catalogItems: CatalogItem[];
+  customerSites: CustomerSite[];
   regions: Region[];
   serviceTypes: ServiceType[];
   members: Profile[];
@@ -101,6 +103,7 @@ export function ServiceDetail({
   service,
   products,
   catalogItems,
+  customerSites,
   regions,
   serviceTypes,
   members,
@@ -139,6 +142,7 @@ export function ServiceDetail({
             <Row label="Servis No" value={service.service_number} />
             <Row label="Telefon" value={service.customer_phone} />
             <Row label="Adres" value={service.address} />
+            <Row label="Şehir" value={region?.name ?? "—"} />
             <Row label="İlçe" value={service.district ?? "—"} />
             <Row label="Site ID" value={service.site_id} />
             <Row label="Proje" value={service.project_name ?? "—"} />
@@ -151,7 +155,6 @@ export function ServiceDetail({
               }
             />
             <Row label="Ürün Grubu" value={product?.name ?? "—"} />
-            <Row label="Bölge" value={region?.name ?? "—"} />
             <Row label="Servis Tipi" value={type?.name ?? "—"} />
             <Row label="İş Kalemi" value={catalogItem?.name ?? "—"} />
             <Row label="Ekip Tipi" value={teamLabels[service.team_type]} />
@@ -628,6 +631,7 @@ export function ServiceDetail({
             <ServiceForm
               action={updateServiceAction}
               catalogItems={catalogItems}
+              customerSites={customerSites}
               members={members}
               mode="edit"
               products={products}

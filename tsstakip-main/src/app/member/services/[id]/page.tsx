@@ -12,7 +12,7 @@ export default async function MemberServiceDetailPage({
   const { id } = await params;
   const { supabase, user, profile } = await requireProfile();
 
-  const [service, products, types, subcontractors, photos, photoRules, regions, catalogItems, voiceNotes, photoInspections] = await Promise.all([
+  const [service, products, types, subcontractors, photos, photoRules, regions, catalogItems, voiceNotes, photoInspections, customerSites] = await Promise.all([
     supabase.from("services").select("*").eq("id", id).eq("member_id", user.id).single(),
     supabase.from("product_groups").select("*").eq("is_active", true).order("name"),
     supabase.from("service_types").select("*").eq("is_active", true).order("name"),
@@ -23,6 +23,7 @@ export default async function MemberServiceDetailPage({
     supabase.from("catalog_items").select("*").eq("is_active", true).order("name"),
     supabase.from("service_voice_notes").select("*").eq("service_id", id).order("created_at", { ascending: false }),
     supabase.from("service_photo_inspections").select("*").eq("service_id", id).order("created_at", { ascending: false }),
+    supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
   ]);
 
   if (!service.data) notFound();
@@ -35,6 +36,7 @@ export default async function MemberServiceDetailPage({
         members={[profile]}
         products={products.data ?? []}
         catalogItems={catalogItems.data ?? []}
+        customerSites={customerSites.data ?? []}
         photos={photos.data ?? []}
         photoInspections={photoInspections.data ?? []}
         regions={regions.data ?? []}

@@ -11,7 +11,7 @@ export default async function AdminServiceDetailPage({
 }) {
   const { id } = await params;
   const { supabase } = await requireAdmin();
-  const [service, products, types, members, subcontractors, photos, photoRules, negotiations, invoices, regions, catalogItems, voiceNotes, photoInspections] = await Promise.all([
+  const [service, products, types, members, subcontractors, photos, photoRules, negotiations, invoices, regions, catalogItems, voiceNotes, photoInspections, customerSites] = await Promise.all([
     supabase.from("services").select("*").eq("id", id).single(),
     supabase.from("product_groups").select("*").eq("is_active", true).order("name"),
     supabase.from("service_types").select("*").eq("is_active", true).order("name"),
@@ -25,6 +25,7 @@ export default async function AdminServiceDetailPage({
     supabase.from("catalog_items").select("*").eq("is_active", true).order("name"),
     supabase.from("service_voice_notes").select("*").eq("service_id", id).order("created_at", { ascending: false }),
     supabase.from("service_photo_inspections").select("*").eq("service_id", id).order("created_at", { ascending: false }),
+    supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
   ]);
 
   if (!service.data) notFound();
@@ -38,6 +39,7 @@ export default async function AdminServiceDetailPage({
         negotiations={negotiations.data ?? []}
         products={products.data ?? []}
         catalogItems={catalogItems.data ?? []}
+        customerSites={customerSites.data ?? []}
         photos={photos.data ?? []}
         photoInspections={photoInspections.data ?? []}
         regions={regions.data ?? []}

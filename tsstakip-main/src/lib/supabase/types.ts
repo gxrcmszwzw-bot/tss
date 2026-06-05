@@ -263,6 +263,8 @@ export type Database = {
           name: string;
           contact_name: string | null;
           phone: string | null;
+          city_code: string | null;
+          city_name: string | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -273,11 +275,53 @@ export type Database = {
           name: string;
           contact_name?: string | null;
           phone?: string | null;
+          city_code?: string | null;
+          city_name?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["subcontractors"]["Insert"]>;
+        Relationships: [];
+      };
+      customer_sites: {
+        Row: {
+          id: string;
+          organization_id: string;
+          site_code: string;
+          site_name: string | null;
+          customer_name: string;
+          customer_phone: string | null;
+          address: string | null;
+          city_code: string | null;
+          city_name: string | null;
+          district_name: string | null;
+          project_name: string | null;
+          airtable_record_id: string | null;
+          source: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          site_code: string;
+          site_name?: string | null;
+          customer_name: string;
+          customer_phone?: string | null;
+          address?: string | null;
+          city_code?: string | null;
+          city_name?: string | null;
+          district_name?: string | null;
+          project_name?: string | null;
+          airtable_record_id?: string | null;
+          source?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["customer_sites"]["Insert"]>;
         Relationships: [];
       };
       product_groups: {
@@ -368,6 +412,7 @@ export type Database = {
           address: string;
           district: string | null;
           site_id: string;
+          customer_site_id: string | null;
           project_name: string | null;
           product_group_id: string | null;
           service_type_id: string | null;
@@ -424,6 +469,7 @@ export type Database = {
           address: string;
           district?: string | null;
           site_id: string;
+          customer_site_id?: string | null;
           project_name?: string | null;
           product_group_id?: string | null;
           service_type_id?: string | null;

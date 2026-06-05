@@ -100,6 +100,7 @@ export const adminNav: NavItem[] = [
     href: "/admin/services",
     label: "Servisler",
   },
+  { href: "/admin/notifications", label: "Bildirimler" },
   { href: "/admin/finance-audit", label: "Finans Denetim" },
   { href: "/admin/ai-alerts", label: "AI Alarmlar" },
   { href: "/admin/reports", label: "Raporlar" },

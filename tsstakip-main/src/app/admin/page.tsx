@@ -45,6 +45,7 @@ export default async function AdminPage({
     trustScoresResult,
     subcontractorNamesResult,
     notificationDeliveriesResult,
+    customerSitesResult,
   ] = await Promise.all([
     supabase.from("services").select("*").order("created_at", { ascending: false }),
     supabase.from("product_groups").select("*").order("name"),
@@ -74,6 +75,7 @@ export default async function AdminPage({
       .in("status", ["pending", "failed", "processing"])
       .order("created_at", { ascending: true })
       .limit(8),
+    supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
   ]);
 
   const services = servicesResult.data ?? [];
@@ -134,6 +136,7 @@ export default async function AdminPage({
             action={createServiceAction}
             buttonLabel="Yeni Servis"
             catalogItems={catalogItemsResult.data ?? []}
+            customerSites={customerSitesResult.data ?? []}
             members={membersResult.data ?? []}
             products={productsResult.data ?? []}
             regions={regionsResult.data ?? []}

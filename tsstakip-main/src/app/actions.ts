@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import * as XLSX from "xlsx";
 
 import { requireAdmin, requireProfile } from "@/lib/auth";
 import {
@@ -21,9 +22,12 @@ import {
   processVoiceNoteAnalysis,
 } from "@/lib/ai";
 import { createMemberAccount, deleteMemberAccount, updateMemberProfile } from "@/lib/supabase/members";
-import { processPendingNotifications, queueNotificationEvent } from "@/lib/notifications";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { processPendingNotifications, queueNotificationEvent, retryNotificationDelivery, sendTestNotification } from "@/lib/notifications";
+import { findTurkeyCity, findTurkeyDistrict, normalizeLocationKey } from "@/lib/turkey-locations";
 import { buildTrustScoreBatch } from "@/lib/trust-score";
 import type {
+  Database,
   FeeType,
   NegotiationStatus,
   NotificationChannel,
@@ -116,6 +120,163 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
+async function ensureRegionForCityCode(
+  organizationId: string,
+  cityCode: string | null,
+) {
+  if (!cityCode) return null;
+
+  const city = findTurkeyCity(cityCode);
+  if (!city) return null;
+
+  const admin = getSupabaseAdminClient();
+  const { data: existing, error: existingError } = await admin
+    .from("regions")
+    .select("id,code,name")
+    .eq("organization_id", organizationId)
+    .eq("code", city.code)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+
+  if (existing) return existing.id;
+
+  const { data: inserted, error: insertError } = await admin
+    .from("regions")
+    .insert({
+      organization_id: organizationId,
+      code: city.code,
+      name: city.name,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !inserted) {
+    throw new Error(insertError?.message ?? "Sehir kaydi olusturulamadi.");
+  }
+
+  return inserted.id;
+}
+
+async function getCustomerSiteSnapshot(
+  organizationId: string,
+  customerSiteId: string | null,
+) {
+  if (!customerSiteId) return null;
+
+  const admin = getSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("customer_sites")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .eq("id", customerSiteId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as Database["public"]["Tables"]["customer_sites"]["Row"] | null;
+}
+
+function matchHeader(record: Record<string, unknown>, candidates: string[]) {
+  const entries = Object.entries(record);
+  const candidateKeys = candidates.map((candidate) => normalizeLocationKey(candidate));
+  const match = entries.find(([key]) => candidateKeys.includes(normalizeLocationKey(key)));
+  return typeof match?.[1] === "string" || typeof match?.[1] === "number"
+    ? String(match[1]).trim()
+    : null;
+}
+
+async function upsertCustomerSite(
+  organizationId: string,
+  payload: {
+    siteCode: string;
+    siteName?: string | null;
+    customerName: string;
+    customerPhone?: string | null;
+    address?: string | null;
+    cityCode?: string | null;
+    cityName?: string | null;
+    districtName?: string | null;
+    projectName?: string | null;
+    airtableRecordId?: string | null;
+    source: "manual" | "airtable";
+  },
+) {
+  const admin = getSupabaseAdminClient();
+  const city = findTurkeyCity(payload.cityCode ?? payload.cityName ?? "");
+
+  const record = {
+    organization_id: organizationId,
+    site_code: payload.siteCode,
+    site_name: payload.siteName ?? null,
+    customer_name: payload.customerName,
+    customer_phone: payload.customerPhone ?? null,
+    address: payload.address ?? null,
+    city_code: city?.code ?? null,
+    city_name: city?.name ?? payload.cityName ?? null,
+    district_name: city ? findTurkeyDistrict(city.code, payload.districtName)?.name ?? payload.districtName ?? null : payload.districtName ?? null,
+    project_name: payload.projectName ?? null,
+    airtable_record_id: payload.airtableRecordId ?? null,
+    source: payload.source,
+    is_active: true,
+  };
+
+  const { error } = await admin
+    .from("customer_sites")
+    .upsert(record, {
+      onConflict: payload.airtableRecordId ? "organization_id,airtable_record_id" : "organization_id,site_code",
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+async function listAirtableCustomerSiteRecords() {
+  const apiKey = process.env.AIRTABLE_API_KEY?.trim();
+  const baseId = process.env.AIRTABLE_BASE_ID?.trim();
+  const tableId = process.env.AIRTABLE_CUSTOMER_SITES_TABLE_ID?.trim();
+
+  if (!apiKey || !baseId || !tableId) {
+    throw new Error("Airtable entegrasyonu icin AIRTABLE_API_KEY, AIRTABLE_BASE_ID ve AIRTABLE_CUSTOMER_SITES_TABLE_ID gerekli.");
+  }
+
+  const records: Array<{ id: string; fields: Record<string, unknown> }> = [];
+  let offset: string | null = null;
+
+  do {
+    const url = new URL(`https://api.airtable.com/v0/${baseId}/${tableId}`);
+    url.searchParams.set("pageSize", "100");
+    if (offset) url.searchParams.set("offset", offset);
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Airtable kayitlari alinamadi (${response.status}).`);
+    }
+
+    const json = await response.json() as {
+      offset?: string;
+      records?: Array<{ id: string; fields: Record<string, unknown> }>;
+    };
+
+    records.push(...(json.records ?? []));
+    offset = json.offset ?? null;
+  } while (offset);
+
+  return records;
+}
+
 export async function createServiceAction(formData: FormData) {
   const { supabase, user, profile, activeOrganizationId } = await requireProfile();
   if (!activeOrganizationId) {
@@ -131,7 +292,10 @@ export async function createServiceAction(formData: FormData) {
         ? (text(formData, "member_id") ?? user.id)
         : user.id
       : null;
-  const regionId = text(formData, "region_id");
+  const customerSiteId = text(formData, "customer_site_id");
+  const customerSite = await getCustomerSiteSnapshot(activeOrganizationId, customerSiteId);
+  const cityCode = text(formData, "city_code") ?? customerSite?.city_code ?? null;
+  const regionId = await ensureRegionForCityCode(activeOrganizationId, cityCode);
   const catalogItemId = text(formData, "catalog_item_id");
   const assignment = await teamFields(supabase, teamType, text(formData, "subcontractor_id"));
   const financeBaseline = await resolveServiceFinanceBaseline(
@@ -144,12 +308,13 @@ export async function createServiceAction(formData: FormData) {
     .from("services")
     .insert({
       organization_id: activeOrganizationId,
-      customer_name: text(formData, "customer_name") ?? "",
-      customer_phone: text(formData, "customer_phone") ?? "",
-      address: text(formData, "address") ?? "",
-      district: text(formData, "district"),
-      site_id: text(formData, "site_id") ?? "",
-      project_name: text(formData, "project_name"),
+      customer_name: customerSite?.customer_name ?? text(formData, "customer_name") ?? "",
+      customer_phone: customerSite?.customer_phone ?? text(formData, "customer_phone") ?? "",
+      address: customerSite?.address ?? text(formData, "address") ?? "",
+      district: customerSite?.district_name ?? text(formData, "district"),
+      site_id: customerSite?.site_code ?? text(formData, "site_id") ?? "",
+      customer_site_id: customerSiteId,
+      project_name: customerSite?.project_name ?? text(formData, "project_name"),
       product_group_id: text(formData, "product_group_id"),
       service_type_id: text(formData, "service_type_id"),
       region_id: regionId,
@@ -194,11 +359,15 @@ export async function createServiceAction(formData: FormData) {
 }
 
 export async function updateServiceAction(formData: FormData) {
-  const { supabase } = await requireAdmin();
+  const { supabase, activeOrganizationId } = await requireAdmin();
+  if (!activeOrganizationId) return;
   const id = text(formData, "id");
   if (!id) return;
   const teamType = (text(formData, "team_type") ?? "technical_team") as TeamType;
-  const regionId = text(formData, "region_id");
+  const customerSiteId = text(formData, "customer_site_id");
+  const customerSite = await getCustomerSiteSnapshot(activeOrganizationId, customerSiteId);
+  const cityCode = text(formData, "city_code") ?? customerSite?.city_code ?? null;
+  const regionId = activeOrganizationId ? await ensureRegionForCityCode(activeOrganizationId, cityCode) : null;
   const catalogItemId = text(formData, "catalog_item_id");
   const assignment = await teamFields(supabase, teamType, text(formData, "subcontractor_id"));
   const financeBaseline = await resolveServiceFinanceBaseline(
@@ -210,12 +379,13 @@ export async function updateServiceAction(formData: FormData) {
   const { error } = await supabase
     .from("services")
     .update({
-      customer_name: text(formData, "customer_name") ?? "",
-      customer_phone: text(formData, "customer_phone") ?? "",
-      address: text(formData, "address") ?? "",
-      district: text(formData, "district"),
-      site_id: text(formData, "site_id") ?? "",
-      project_name: text(formData, "project_name"),
+      customer_name: customerSite?.customer_name ?? text(formData, "customer_name") ?? "",
+      customer_phone: customerSite?.customer_phone ?? text(formData, "customer_phone") ?? "",
+      address: customerSite?.address ?? text(formData, "address") ?? "",
+      district: customerSite?.district_name ?? text(formData, "district"),
+      site_id: customerSite?.site_code ?? text(formData, "site_id") ?? "",
+      customer_site_id: customerSiteId,
+      project_name: customerSite?.project_name ?? text(formData, "project_name"),
       product_group_id: text(formData, "product_group_id"),
       service_type_id: text(formData, "service_type_id"),
       region_id: regionId,
@@ -268,6 +438,28 @@ export async function updateServiceStatusAction(formData: FormData) {
 
   const { error } = await supabase.from("services").update(patch).eq("id", id);
   if (error) return;
+
+  if (status === "completed") {
+    const { data: notificationService } = await supabase
+      .from("services")
+      .select("organization_id,customer_name,customer_phone,service_number")
+      .eq("id", id)
+      .single();
+
+    if (notificationService?.customer_phone) {
+      await queueNotificationEvent({
+        organizationId: notificationService.organization_id,
+        eventKey: "service_completed",
+        serviceId: id,
+        recipient: notificationService.customer_phone,
+        payload: {
+          customer_name: notificationService.customer_name,
+          service_number: notificationService.service_number,
+        },
+        channels: ["sms"],
+      });
+    }
+  }
 
   revalidatePath(`/${profile.role === "admin" ? "admin" : "member"}/services/${id}`);
   revalidatePath(`/${profile.role === "admin" ? "admin" : "member"}`);
@@ -533,11 +725,14 @@ export async function deleteServiceTypeAction(formData: FormData) {
 export async function createSubcontractorAction(formData: FormData) {
   const { supabase, activeOrganizationId } = await requireAdmin();
   if (!activeOrganizationId) return;
+  const city = findTurkeyCity(text(formData, "city_code") ?? text(formData, "city_name"));
   await supabase.from("subcontractors").insert({
     organization_id: activeOrganizationId,
     name: text(formData, "name") ?? "",
     contact_name: text(formData, "contact_name"),
     phone: text(formData, "phone"),
+    city_code: city?.code ?? null,
+    city_name: city?.name ?? null,
   });
   revalidatePath("/admin/settings");
 }
@@ -552,6 +747,8 @@ export async function updateSubcontractorAction(formData: FormData) {
       name: text(formData, "name") ?? "",
       contact_name: text(formData, "contact_name"),
       phone: text(formData, "phone"),
+      city_code: findTurkeyCity(text(formData, "city_code") ?? text(formData, "city_name"))?.code ?? null,
+      city_name: findTurkeyCity(text(formData, "city_code") ?? text(formData, "city_name"))?.name ?? null,
     })
     .eq("id", id);
   revalidatePath("/admin/settings");
@@ -621,11 +818,16 @@ export async function createCatalogPriceVersionAction(formData: FormData) {
 export async function createRegionAction(formData: FormData) {
   const { supabase, activeOrganizationId } = await requireAdmin();
   if (!activeOrganizationId) return;
+  const city = findTurkeyCity(text(formData, "city_code") ?? text(formData, "code") ?? text(formData, "name"));
+  if (!city) return;
 
-  await supabase.from("regions").insert({
+  await supabase.from("regions").upsert({
     organization_id: activeOrganizationId,
-    name: text(formData, "name") ?? "",
-    code: text(formData, "code") ?? "",
+    name: city.name,
+    code: city.code,
+    is_active: true,
+  }, {
+    onConflict: "organization_id,code",
   });
   revalidatePath("/admin/settings");
 }
@@ -655,7 +857,7 @@ export async function deleteRegionAction(formData: FormData) {
 export async function createRegionalPriceMultiplierAction(formData: FormData) {
   const { supabase, activeOrganizationId } = await requireAdmin();
   if (!activeOrganizationId) return;
-  const regionId = text(formData, "region_id");
+  const regionId = await ensureRegionForCityCode(activeOrganizationId, text(formData, "city_code"));
   const catalogItemId = text(formData, "catalog_item_id");
   const multiplier = amount(formData, "multiplier");
   const effectiveFrom = dateTime(text(formData, "effective_from"));
@@ -669,6 +871,153 @@ export async function createRegionalPriceMultiplierAction(formData: FormData) {
     effective_from: effectiveFrom,
   });
   revalidatePath("/admin/settings");
+}
+
+export async function importSubcontractorsFromExcelAction(formData: FormData) {
+  const { supabase, activeOrganizationId } = await requireAdmin();
+  const file = formData.get("file");
+  if (!activeOrganizationId || !(file instanceof File)) return;
+
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const firstSheet = workbook.SheetNames[0];
+  if (!firstSheet) {
+    redirect("/admin/settings?error=Excel sayfasi bulunamadi.");
+  }
+
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[firstSheet], {
+    defval: "",
+  });
+
+  const records = rows
+    .map((row) => {
+      const city = findTurkeyCity(
+        matchHeader(row, ["city_code", "sehir_kodu", "şehir kodu", "city", "şehir", "il"]),
+      );
+
+      return {
+        organization_id: activeOrganizationId,
+        name: matchHeader(row, ["name", "firma adı", "firma adi", "taşeron", "taseron", "company"]),
+        contact_name: matchHeader(row, ["contact_name", "sorumlu", "yetkili", "contact"]),
+        phone: matchHeader(row, ["phone", "telefon", "gsm", "mobile"]),
+        city_code: city?.code ?? null,
+        city_name: city?.name ?? null,
+      };
+    })
+    .filter((item): item is {
+      organization_id: string;
+      name: string;
+      contact_name: string | null;
+      phone: string | null;
+      city_code: string | null;
+      city_name: string | null;
+    } => Boolean(item.name));
+
+  if (records.length === 0) {
+    redirect("/admin/settings?error=Import icin gecerli taseron satiri bulunamadi.");
+  }
+
+  const { error } = await supabase.from("subcontractors").insert(records);
+  if (error) {
+    redirect(`/admin/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/admin/settings");
+  redirect(`/admin/settings?ok=${encodeURIComponent(`${records.length} taseron yüklendi.`)}`);
+}
+
+export async function createCustomerSiteAction(formData: FormData) {
+  const { activeOrganizationId } = await requireAdmin();
+  if (!activeOrganizationId) return;
+
+  try {
+    await upsertCustomerSite(activeOrganizationId, {
+      siteCode: text(formData, "site_code") ?? "",
+      siteName: text(formData, "site_name"),
+      customerName: text(formData, "customer_name") ?? "",
+      customerPhone: text(formData, "customer_phone"),
+      address: text(formData, "address"),
+      cityCode: text(formData, "city_code"),
+      cityName: text(formData, "city_name"),
+      districtName: text(formData, "district_name"),
+      projectName: text(formData, "project_name"),
+      source: "manual",
+    });
+  } catch (error) {
+    redirect(`/admin/settings?error=${encodeURIComponent(formatError(error))}`);
+  }
+
+  revalidatePath("/admin/settings");
+}
+
+export async function updateCustomerSiteAction(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const id = text(formData, "id");
+  if (!id) return;
+
+  const city = findTurkeyCity(text(formData, "city_code") ?? text(formData, "city_name"));
+
+  const { error } = await supabase
+    .from("customer_sites")
+    .update({
+      site_code: text(formData, "site_code") ?? "",
+      site_name: text(formData, "site_name"),
+      customer_name: text(formData, "customer_name") ?? "",
+      customer_phone: text(formData, "customer_phone"),
+      address: text(formData, "address"),
+      city_code: city?.code ?? null,
+      city_name: city?.name ?? null,
+      district_name: city ? findTurkeyDistrict(city.code, text(formData, "district_name"))?.name ?? text(formData, "district_name") : text(formData, "district_name"),
+      project_name: text(formData, "project_name"),
+      is_active: bool(formData, "is_active"),
+    })
+    .eq("id", id);
+
+  if (error) {
+    redirect(`/admin/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/admin/settings");
+}
+
+export async function deleteCustomerSiteAction(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const id = text(formData, "id");
+  if (!id) return;
+  await supabase.from("customer_sites").delete().eq("id", id);
+  revalidatePath("/admin/settings");
+}
+
+export async function syncCustomerSitesFromAirtableAction() {
+  const { activeOrganizationId } = await requireAdmin();
+  if (!activeOrganizationId) return;
+
+  try {
+    const records = await listAirtableCustomerSiteRecords();
+
+    for (const record of records) {
+      await upsertCustomerSite(activeOrganizationId, {
+        siteCode:
+          matchHeader(record.fields, ["site_id", "site code", "site_code"]) ??
+          record.id,
+        siteName: matchHeader(record.fields, ["site_name", "site name", "site"]),
+        customerName: matchHeader(record.fields, ["customer_name", "customer", "müşteri adı", "musteri adi"]) ?? "Müşteri",
+        customerPhone: matchHeader(record.fields, ["customer_phone", "phone", "telefon"]),
+        address: matchHeader(record.fields, ["address", "adres"]),
+        cityCode: matchHeader(record.fields, ["city_code", "il kodu", "şehir kodu", "sehir_kodu"]),
+        cityName: matchHeader(record.fields, ["city", "il", "şehir", "sehir"]),
+        districtName: matchHeader(record.fields, ["district", "ilçe", "ilce"]),
+        projectName: matchHeader(record.fields, ["project_name", "project", "proje adı", "proje adi"]),
+        airtableRecordId: record.id,
+        source: "airtable",
+      });
+    }
+
+    revalidatePath("/admin/settings");
+    redirect(`/admin/settings?ok=${encodeURIComponent(`${records.length} Airtable kaydı senkronize edildi.`)}`);
+  } catch (error) {
+    redirect(`/admin/settings?error=${encodeURIComponent(formatError(error))}`);
+  }
 }
 
 export async function updateRegionalPriceMultiplierAction(formData: FormData) {
@@ -751,6 +1100,30 @@ export async function deleteNotificationTemplateAction(formData: FormData) {
 
   await supabase.from("notification_templates").delete().eq("id", id);
   revalidatePath("/admin/settings");
+}
+
+export async function sendNotificationTemplateTestAction(formData: FormData) {
+  const { activeOrganizationId } = await requireAdmin();
+  const templateId = text(formData, "template_id");
+  const recipient = text(formData, "recipient");
+
+  if (!activeOrganizationId || !templateId || !recipient) {
+    redirect("/admin/settings?error=Test bildirimi icin sablon ve alici gerekli.");
+  }
+
+  try {
+    const result = await sendTestNotification({
+      organizationId: activeOrganizationId,
+      templateId,
+      recipient,
+    });
+
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin");
+    redirect(`/admin/settings?ok=${encodeURIComponent(`Test bildirimi gonderildi: ${result.status}`)}`);
+  } catch (error) {
+    redirect(`/admin/settings?error=${encodeURIComponent(formatError(error))}`);
+  }
 }
 
 export async function togglePriorityAction(formData: FormData) {
@@ -1043,6 +1416,28 @@ export async function generatePayoutBatchAction(formData: FormData) {
       .in("id", excludedServiceIds);
   }
 
+  const servicesById = new Map((serviceResult.data ?? []).map((service) => [service.id, service]));
+  for (const item of batchItems) {
+    if (item.inclusionStatus === "included") continue;
+    if (item.reasonCode !== "uploaded_after_cutoff") continue;
+
+    const service = servicesById.get(item.serviceId);
+    if (!service?.subcontractor_phone) continue;
+
+    await queueNotificationEvent({
+      organizationId: service.organization_id,
+      eventKey: "cutoff_missed",
+      serviceId: service.id,
+      subcontractorId: service.subcontractor_id,
+      recipient: service.subcontractor_phone,
+      payload: {
+        customer_name: service.customer_name,
+        service_number: service.service_number,
+      },
+      channels: ["whatsapp", "sms"],
+    });
+  }
+
   revalidatePath("/admin/services");
   revalidatePath("/admin/reports");
   redirect(`/admin/services?ok=${encodeURIComponent(`Payout batch hazirlandi: ${batchDate}`)}`);
@@ -1300,7 +1695,23 @@ export async function processPendingNotificationsAction(formData: FormData) {
   const result = await processPendingNotifications({ limit });
   const message = `Bildirim kuyruğu işlendi. Toplam ${result.processed}, gönderildi ${result.sent}, hata ${result.failed}, iptal ${result.canceled}.`;
   revalidatePath("/admin");
+  revalidatePath("/admin/notifications");
   redirect(`/admin?ok=${encodeURIComponent(message)}`);
+}
+
+export async function retryNotificationDeliveryAction(formData: FormData) {
+  await requireAdmin();
+  const deliveryId = text(formData, "delivery_id");
+  if (!deliveryId) return;
+
+  try {
+    const result = await retryNotificationDelivery(deliveryId);
+    revalidatePath("/admin");
+    revalidatePath("/admin/notifications");
+    redirect(`/admin/notifications?ok=${encodeURIComponent(`Bildirim yeniden denendi: ${result.status}`)}`);
+  } catch (error) {
+    redirect(`/admin/notifications?error=${encodeURIComponent(formatError(error))}`);
+  }
 }
 
 export async function resolveAiAlertAction(formData: FormData) {

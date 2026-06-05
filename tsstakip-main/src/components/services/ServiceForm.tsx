@@ -6,6 +6,7 @@ import { useOfflineSync } from "@/components/offline/OfflineSyncProvider";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type {
   CatalogItem,
+  CustomerSite,
   ProductGroup,
   Profile,
   Region,
@@ -15,6 +16,7 @@ import type {
 } from "@/lib/data";
 import { enqueueOfflineEntry } from "@/lib/offline-queue";
 import { feeLabels, priorityLabels, statusLabels } from "@/lib/labels";
+import { getTurkeyDistrictsByCityCode, TURKEY_CITIES } from "@/lib/turkey-locations";
 import type { FeeType, ServicePriority, ServiceStatus, TeamType } from "@/lib/supabase/types";
 
 type ServiceFormProps = {
@@ -22,6 +24,7 @@ type ServiceFormProps = {
   service?: Service;
   products: ProductGroup[];
   catalogItems: CatalogItem[];
+  customerSites: CustomerSite[];
   regions: Region[];
   serviceTypes: ServiceType[];
   members: Profile[];
@@ -52,6 +55,7 @@ export function ServiceForm({
   service,
   products,
   catalogItems,
+  customerSites,
   regions,
   serviceTypes,
   members,
@@ -64,11 +68,25 @@ export function ServiceForm({
   const initialTeamType = service?.team_type ?? "technical_team";
   const [teamType, setTeamType] = useState(initialTeamType);
   const [subcontractorId, setSubcontractorId] = useState(service?.subcontractor_id ?? "");
+  const [selectedCustomerSiteId, setSelectedCustomerSiteId] = useState(service?.customer_site_id ?? "");
   const [offlineMessage, setOfflineMessage] = useState<string | null>(null);
   const { isOnline, refreshQueue } = useOfflineSync();
   const selectedSubcontractor = useMemo(
     () => subcontractors.find((item) => item.id === subcontractorId),
     [subcontractorId, subcontractors],
+  );
+  const currentRegion = useMemo(
+    () => regions.find((item) => item.id === service?.region_id),
+    [regions, service?.region_id],
+  );
+  const [selectedCityCode, setSelectedCityCode] = useState(currentRegion?.code ?? "");
+  const selectedCustomerSite = useMemo(
+    () => customerSites.find((item) => item.id === selectedCustomerSiteId),
+    [customerSites, selectedCustomerSiteId],
+  );
+  const districtOptions = useMemo(
+    () => getTurkeyDistrictsByCityCode(selectedCityCode),
+    [selectedCityCode],
   );
   const isSubcontractorTeam = teamType === "subcontractor";
   const isTechnicalTeam = teamType === "technical_team";
@@ -76,6 +94,27 @@ export function ServiceForm({
     selectedSubcontractor?.contact_name ?? service?.subcontractor_contact ?? "";
   const subcontractorPhone =
     selectedSubcontractor?.phone ?? service?.subcontractor_phone ?? "";
+
+  function setFieldValue(name: string, value: string) {
+    const field = formRef.current?.elements.namedItem(name);
+    if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+      field.value = value;
+    }
+  }
+
+  function applyCustomerSite(siteId: string) {
+    setSelectedCustomerSiteId(siteId);
+    const site = customerSites.find((item) => item.id === siteId);
+    if (!site) return;
+
+    setFieldValue("customer_name", site.customer_name ?? "");
+    setFieldValue("customer_phone", site.customer_phone ?? "");
+    setFieldValue("address", site.address ?? "");
+    setFieldValue("site_id", site.site_code ?? "");
+    setFieldValue("project_name", site.project_name ?? "");
+    setSelectedCityCode(site.city_code ?? "");
+    setFieldValue("district", site.district_name ?? "");
+  }
 
   function queueOfflineCreate() {
     if (!formRef.current) return;
@@ -93,6 +132,8 @@ export function ServiceForm({
     formRef.current.reset();
     setTeamType("technical_team");
     setSubcontractorId("");
+    setSelectedCustomerSiteId("");
+    setSelectedCityCode("");
   }
 
   return (
@@ -101,10 +142,52 @@ export function ServiceForm({
 
       <Section step="1" title="Müşteri Bilgileri">
         <div className="grid gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-foreground/75">Kayıtlı Site / Müşteri</span>
+            <select
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
+              name="customer_site_id"
+              onChange={(event) => applyCustomerSite(event.target.value)}
+              value={selectedCustomerSiteId}
+            >
+              <option value="">Manuel giriş</option>
+              {customerSites.map((item) => (
+                <option key={item.id} value={item.id}>{item.site_code} · {item.customer_name}</option>
+              ))}
+            </select>
+          </label>
+          <div className="hidden md:block" />
           <Field label="Ad Soyad" name="customer_name" required value={service?.customer_name} />
           <Field label="Telefon" name="customer_phone" required value={service?.customer_phone} />
           <Field className="md:col-span-2" label="Adres" name="address" required value={service?.address} />
-          <Field label="İlçe" name="district" value={service?.district} />
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-foreground/75">Şehir</span>
+            <select
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
+              name="city_code"
+              onChange={(event) => setSelectedCityCode(event.target.value)}
+              value={selectedCityCode}
+            >
+              <option value="">Seçiniz</option>
+              {TURKEY_CITIES.map((city) => (
+                <option key={city.code} value={city.code}>{city.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-foreground/75">İlçe</span>
+            <select
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
+              defaultValue={service?.district ?? selectedCustomerSite?.district_name ?? ""}
+              key={`${selectedCityCode}-${service?.district ?? selectedCustomerSite?.district_name ?? ""}`}
+              name="district"
+            >
+              <option value="">Seçiniz</option>
+              {districtOptions.map((district) => (
+                <option key={district.code} value={district.name}>{district.name}</option>
+              ))}
+            </select>
+          </label>
           <Field label="Site ID" name="site_id" required value={service?.site_id} />
           <Field className="md:col-span-2" label="Proje Adı" name="project_name" value={service?.project_name} />
           {isAdmin ? (
@@ -125,12 +208,7 @@ export function ServiceForm({
               <option key={item.id} value={item.id}>{item.name}</option>
             ))}
           </Select>
-          <Select label="Bölge" name="region_id" value={service?.region_id}>
-            <option value="">Seçiniz</option>
-            {regions.map((item) => (
-              <option key={item.id} value={item.id}>{item.name}</option>
-            ))}
-          </Select>
+          <Field label="Finans Şehri" name="finance_city_display" readOnly value={TURKEY_CITIES.find((item) => item.code === selectedCityCode)?.name ?? currentRegion?.name ?? ""} />
           <Select label="Servis Tipi" name="service_type_id" value={service?.service_type_id}>
             <option value="">Seçiniz</option>
             {serviceTypes.map((item) => (

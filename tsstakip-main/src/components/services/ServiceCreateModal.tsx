@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ServiceForm } from "@/components/services/ServiceForm";
 import type {
   CatalogItem,
+  CustomerSite,
   ProductGroup,
   Profile,
   Region,
@@ -19,6 +20,7 @@ type ServiceCreateModalProps = {
   members: Profile[];
   products: ProductGroup[];
   catalogItems: CatalogItem[];
+  customerSites: CustomerSite[];
   regions: Region[];
   role: "admin" | "member";
   serviceTypes: ServiceType[];
@@ -32,6 +34,7 @@ export function ServiceCreateModal({
   members,
   products,
   catalogItems,
+  customerSites,
   regions,
   role,
   serviceTypes,
@@ -72,6 +75,7 @@ export function ServiceCreateModal({
                 mode="create"
                 products={products}
                 catalogItems={catalogItems}
+                customerSites={customerSites}
                 regions={regions}
                 role={role}
                 serviceTypes={serviceTypes}

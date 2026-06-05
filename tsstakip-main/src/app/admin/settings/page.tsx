@@ -3,12 +3,15 @@ import { Plus, Trash2 } from "lucide-react";
 import {
   createCatalogItemAction,
   createCatalogPriceVersionAction,
+  createCustomerSiteAction,
   createNotificationTemplateAction,
   createRegionAction,
   createRegionalPriceMultiplierAction,
   createProductGroupAction,
   createServiceTypeAction,
+  sendNotificationTemplateTestAction,
   createSubcontractorAction,
+  deleteCustomerSiteAction,
   deleteCatalogItemAction,
   deleteNotificationTemplateAction,
   deleteRegionAction,
@@ -16,8 +19,11 @@ import {
   deleteProductGroupAction,
   deleteServiceTypeAction,
   deleteSubcontractorAction,
+  importSubcontractorsFromExcelAction,
+  syncCustomerSitesFromAirtableAction,
   togglePriorityAction,
   updateCatalogItemAction,
+  updateCustomerSiteAction,
   updateNotificationTemplateAction,
   updateRegionAction,
   updateRegionalPriceMultiplierAction,
@@ -33,6 +39,7 @@ import { formatCurrency, formatDateTime, notificationChannelLabels, priorityLabe
 import type {
   CatalogItem,
   CatalogPriceVersion,
+  CustomerSite,
   NotificationTemplate,
   ProductGroup,
   Region,
@@ -40,10 +47,11 @@ import type {
   ServiceType,
   Subcontractor,
 } from "@/lib/data";
+import { getTurkeyDistrictsByCityCode, TURKEY_CITIES } from "@/lib/turkey-locations";
 
 export default async function SettingsPage() {
   const { supabase } = await requireAdmin();
-  const [products, types, priorities, subcontractors, photoRules, catalogItems, catalogPriceVersions, regions, multipliers, notificationTemplates] =
+  const [products, types, priorities, subcontractors, photoRules, catalogItems, catalogPriceVersions, regions, multipliers, notificationTemplates, customerSites] =
     await Promise.all([
       supabase.from("product_groups").select("*").order("name"),
       supabase.from("service_types").select("*").order("name"),
@@ -55,11 +63,12 @@ export default async function SettingsPage() {
       supabase.from("regions").select("*").order("name"),
       supabase.from("regional_price_multipliers").select("*").order("effective_from", { ascending: false }),
       supabase.from("notification_templates").select("*").order("event_key").order("channel"),
+      supabase.from("customer_sites").select("*").order("site_code"),
     ]);
 
   return (
     <>
-      <PageHeader subtitle="Ürün, servis tipi, öncelik, taşeron, finans katalogu ve fotoğraf kuralları" title="Ayarlar" />
+      <PageHeader subtitle="Ürün, servis tipi, taşeron, şehir bazlı finans, müşteri/site ve bildirim ayarları" title="Ayarlar" />
       <div className="grid gap-5 lg:grid-cols-2">
 
         {/* Ürün Grupları */}
@@ -148,7 +157,7 @@ export default async function SettingsPage() {
 
         {/* Taşeron Firmalar */}
         <Panel title="Taşeron Firmalar">
-          <form action={createSubcontractorAction} className="grid grid-cols-3 gap-2">
+          <form action={createSubcontractorAction} className="grid gap-2 md:grid-cols-2">
             <input
               className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
               name="name"
@@ -165,13 +174,39 @@ export default async function SettingsPage() {
               name="phone"
               placeholder="Telefon"
             />
+            <select
+              className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
+              name="city_code"
+            >
+              <option value="">Şehir seç</option>
+              {TURKEY_CITIES.map((city) => (
+                <option key={city.code} value={city.code}>{city.name}</option>
+              ))}
+            </select>
             <SubmitButton
-              className="col-span-3 flex h-10 items-center justify-center gap-2 rounded-lg bg-accent text-sm font-semibold text-white hover:bg-accent-strong"
+              className="md:col-span-2 flex h-10 items-center justify-center gap-2 rounded-lg bg-accent text-sm font-semibold text-white hover:bg-accent-strong"
               pendingLabel="Ekleniyor..."
             >
               <Plus size={16} aria-hidden="true" />
               Taşeron Ekle
             </SubmitButton>
+          </form>
+          <form action={importSubcontractorsFromExcelAction} className="mt-3 grid gap-2 rounded-lg border border-dashed border-border bg-panel-muted/40 p-3">
+            <p className="text-xs text-foreground/60">
+              Excel kolonları: `Firma Adı`, `Sorumlu`, `Telefon`, `Şehir` veya `Şehir Kodu`
+            </p>
+            <input
+              accept=".xlsx,.xls,.csv"
+              className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              name="file"
+              required
+              type="file"
+            />
+            <SubmitButton
+              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-panel text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
+              label="Excel ile Taşeron Yükle"
+              pendingLabel="Yükleniyor..."
+            />
           </form>
           <div className="mt-4 space-y-2">
             {(subcontractors.data ?? []).length === 0 ? (
@@ -226,46 +261,40 @@ export default async function SettingsPage() {
           </div>
         </Panel>
 
-        <Panel title="Bölgeler ve Çarpanlar">
-          <form action={createRegionAction} className="grid gap-2 md:grid-cols-2">
-            <input
+        <Panel title="Şehir Bazlı Çarpanlar">
+          <form action={createRegionAction} className="grid gap-2 md:grid-cols-[1fr_auto]">
+            <select
               className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
-              name="name"
-              placeholder="Bölge adı"
+              name="city_code"
               required
-            />
-            <input
-              className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
-              name="code"
-              placeholder="Kod"
-              required
-            />
+            >
+              <option value="">Türkiye şehri seç</option>
+              {TURKEY_CITIES.map((city) => (
+                <option key={city.code} value={city.code}>{city.name}</option>
+              ))}
+            </select>
             <SubmitButton
-              className="md:col-span-2 flex h-10 items-center justify-center gap-2 rounded-lg bg-accent text-sm font-semibold text-white hover:bg-accent-strong"
+              className="flex h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong"
               pendingLabel="Ekleniyor..."
             >
               <Plus size={16} aria-hidden="true" />
-              Bölge Ekle
+              Şehri Aktifleştir
             </SubmitButton>
           </form>
           <div className="mt-4 space-y-2">
-            {(regions.data ?? []).length === 0 ? (
-              <Empty />
-            ) : (
-              (regions.data ?? []).map((item) => (
-                <RegionRow key={item.id} item={item} />
-              ))
-            )}
+            {(regions.data ?? []).length === 0 ? <Empty /> : (regions.data ?? []).map((item) => (
+              <RegionRow key={item.id} item={item} />
+            ))}
           </div>
           <form action={createRegionalPriceMultiplierAction} className="mt-5 grid gap-2 border-t border-border pt-4 md:grid-cols-2">
             <select
               className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
-              name="region_id"
+              name="city_code"
               required
             >
-              <option value="">Bölge seç</option>
-              {(regions.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
+              <option value="">Şehir seç</option>
+              {TURKEY_CITIES.map((city) => (
+                <option key={city.code} value={city.code}>{city.name}</option>
               ))}
             </select>
             <select
@@ -294,11 +323,11 @@ export default async function SettingsPage() {
             />
             <SubmitButton
               className="md:col-span-2 flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-panel text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
-              label="Çarpan Ekle"
+              label="Şehir Çarpanı Ekle"
               pendingLabel="Ekleniyor..."
             />
           </form>
-      <div className="mt-4 space-y-1">
+          <div className="mt-4 space-y-1">
             {(multipliers.data ?? []).slice(0, 8).map((item) => (
               <MultiplierRow
                 catalogItems={catalogItems.data ?? []}
@@ -307,6 +336,49 @@ export default async function SettingsPage() {
                 regions={regions.data ?? []}
               />
             ))}
+          </div>
+        </Panel>
+
+        <Panel title="Müşteri ve Site Bilgileri">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <form action={syncCustomerSitesFromAirtableAction}>
+              <SubmitButton
+                className="flex h-10 items-center justify-center rounded-lg border border-border bg-panel px-4 text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
+                label="Airtable'dan Senkronize Et"
+                pendingLabel="Senkronize ediliyor..."
+              />
+            </form>
+          </div>
+          <form action={createCustomerSiteAction} className="grid gap-2 md:grid-cols-2">
+            <input className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="site_code" placeholder="Site ID / Kod" required />
+            <input className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="site_name" placeholder="Site adı" />
+            <input className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="customer_name" placeholder="Müşteri adı" required />
+            <input className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="customer_phone" placeholder="Müşteri telefonu" />
+            <input className="md:col-span-2 h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="address" placeholder="Adres" />
+            <select className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="city_code">
+              <option value="">Şehir seç</option>
+              {TURKEY_CITIES.map((city) => (
+                <option key={city.code} value={city.code}>{city.name}</option>
+              ))}
+            </select>
+            <input className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="district_name" placeholder="İlçe" />
+            <input className="md:col-span-2 h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent" name="project_name" placeholder="Proje adı" />
+            <SubmitButton
+              className="md:col-span-2 flex h-10 items-center justify-center gap-2 rounded-lg bg-accent text-sm font-semibold text-white hover:bg-accent-strong"
+              pendingLabel="Kaydediliyor..."
+            >
+              <Plus size={16} aria-hidden="true" />
+              Müşteri / Site Ekle
+            </SubmitButton>
+          </form>
+          <div className="mt-4 space-y-2">
+            {(customerSites.data ?? []).length === 0 ? (
+              <Empty />
+            ) : (
+              (customerSites.data ?? []).map((item) => (
+                <CustomerSiteRow key={item.id} item={item} />
+              ))
+            )}
           </div>
         </Panel>
 
@@ -536,7 +608,7 @@ function MultiplierRow({
   return (
     <div className="rounded-md bg-panel-muted px-3 py-2 text-xs">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span>{region?.name ?? "Bölge"} · {catalogItem?.name ?? "İş kalemi"}</span>
+        <span>{region?.name ?? "Şehir"} · {catalogItem?.name ?? "İş kalemi"}</span>
         <form action={deleteRegionalPriceMultiplierAction}>
           <input name="id" type="hidden" value={item.id} />
           <SubmitButton
@@ -680,6 +752,20 @@ function NotificationTemplateRow({ item }: { item: NotificationTemplate }) {
           pendingLabel="..."
         />
       </form>
+      <form action={sendNotificationTemplateTestAction} className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input name="template_id" type="hidden" value={item.id} />
+        <input
+          className="h-9 flex-1 rounded-md border border-border bg-panel px-2 text-sm outline-none focus:border-accent"
+          name="recipient"
+          placeholder={item.channel === "sms" ? "+90555..." : "WhatsApp alicisi"}
+          required
+        />
+        <SubmitButton
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border px-3 text-xs font-medium hover:border-accent/40 hover:text-accent"
+          label="Test Gonder"
+          pendingLabel="Gonderiliyor..."
+        />
+      </form>
     </div>
   );
 }
@@ -759,26 +845,36 @@ function ServiceTypeRow({ item, products }: { item: ServiceType; products: Produ
 function SubcontractorRow({ item }: { item: Subcontractor }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-      <form action={updateSubcontractorAction} className="flex flex-1 items-center gap-2">
+      <form action={updateSubcontractorAction} className="grid flex-1 gap-2 md:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
         <input name="id" type="hidden" value={item.id} />
         <input
-          className="h-9 flex-1 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none transition hover:border-border focus:border-accent focus:bg-panel focus:ring-1 focus:ring-accent/20"
+          className="h-9 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none transition hover:border-border focus:border-accent focus:bg-panel focus:ring-1 focus:ring-accent/20"
           defaultValue={item.name}
           name="name"
           required
         />
         <input
-          className="h-9 w-28 rounded-md border border-transparent bg-transparent px-2 text-xs outline-none hover:border-border focus:border-accent focus:bg-panel"
+          className="h-9 rounded-md border border-transparent bg-transparent px-2 text-xs outline-none hover:border-border focus:border-accent focus:bg-panel"
           defaultValue={item.contact_name ?? ""}
           name="contact_name"
           placeholder="Sorumlu"
         />
         <input
-          className="h-9 w-28 rounded-md border border-transparent bg-transparent px-2 text-xs outline-none hover:border-border focus:border-accent focus:bg-panel"
+          className="h-9 rounded-md border border-transparent bg-transparent px-2 text-xs outline-none hover:border-border focus:border-accent focus:bg-panel"
           defaultValue={item.phone ?? ""}
           name="phone"
           placeholder="Telefon"
         />
+        <select
+          className="h-9 rounded-md border border-transparent bg-transparent px-2 text-xs outline-none hover:border-border focus:border-accent focus:bg-panel"
+          defaultValue={item.city_code ?? ""}
+          name="city_code"
+        >
+          <option value="">Şehir</option>
+          {TURKEY_CITIES.map((city) => (
+            <option key={city.code} value={city.code}>{city.name}</option>
+          ))}
+        </select>
         <SubmitButton
           className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:border-accent/40 hover:text-accent disabled:opacity-60"
           label="Kaydet"
@@ -795,6 +891,64 @@ function SubcontractorRow({ item }: { item: Subcontractor }) {
           <Trash2 size={15} aria-hidden="true" />
         </SubmitButton>
       </form>
+    </div>
+  );
+}
+
+function CustomerSiteRow({ item }: { item: CustomerSite }) {
+  const districts = getTurkeyDistrictsByCityCode(item.city_code);
+
+  return (
+    <div className="rounded-lg border border-border bg-background p-3">
+      <div className="mb-2 text-xs text-foreground/60">
+        {item.site_code} · {item.source} {item.airtable_record_id ? "· airtable" : ""}
+      </div>
+      <div className="grid gap-2 md:grid-cols-2">
+        <form action={updateCustomerSiteAction} className="contents">
+          <input name="id" type="hidden" value={item.id} />
+          <input className="h-9 rounded-md border border-border bg-panel px-2 text-sm outline-none focus:border-accent" defaultValue={item.site_code} name="site_code" required />
+          <input className="h-9 rounded-md border border-border bg-panel px-2 text-sm outline-none focus:border-accent" defaultValue={item.site_name ?? ""} name="site_name" placeholder="Site adı" />
+          <input className="h-9 rounded-md border border-border bg-panel px-2 text-sm outline-none focus:border-accent" defaultValue={item.customer_name} name="customer_name" required />
+          <input className="h-9 rounded-md border border-border bg-panel px-2 text-sm outline-none focus:border-accent" defaultValue={item.customer_phone ?? ""} name="customer_phone" placeholder="Telefon" />
+          <input className="md:col-span-2 h-9 rounded-md border border-border bg-panel px-2 text-sm outline-none focus:border-accent" defaultValue={item.address ?? ""} name="address" placeholder="Adres" />
+          <select className="h-9 rounded-md border border-border bg-panel px-2 text-sm outline-none focus:border-accent" defaultValue={item.city_code ?? ""} name="city_code">
+            <option value="">Şehir seç</option>
+            {TURKEY_CITIES.map((city) => (
+              <option key={city.code} value={city.code}>{city.name}</option>
+            ))}
+          </select>
+          <select className="h-9 rounded-md border border-border bg-panel px-2 text-sm outline-none focus:border-accent" defaultValue={item.district_name ?? ""} name="district_name">
+            <option value="">İlçe seç</option>
+            {districts.map((district) => (
+              <option key={district.code} value={district.name}>{district.name}</option>
+            ))}
+          </select>
+          <input className="md:col-span-2 h-9 rounded-md border border-border bg-panel px-2 text-sm outline-none focus:border-accent" defaultValue={item.project_name ?? ""} name="project_name" placeholder="Proje adı" />
+          <label className="md:col-span-2 flex items-center gap-2 text-sm text-foreground/70">
+            <input className="h-4 w-4 accent-accent" defaultChecked={item.is_active} name="is_active" type="checkbox" />
+            Aktif
+          </label>
+          <div className="md:col-span-2 flex items-center gap-2">
+            <SubmitButton
+              className="inline-flex h-9 items-center justify-center rounded-md border border-border px-3 text-xs font-medium hover:border-accent/40 hover:text-accent"
+              label="Kaydet"
+              pendingLabel="Kaydediliyor..."
+            />
+          </div>
+        </form>
+        <div className="md:col-span-2">
+          <form action={deleteCustomerSiteAction}>
+            <input name="id" type="hidden" value={item.id} />
+            <SubmitButton
+              className="flex h-9 w-9 items-center justify-center rounded-md text-foreground/40 hover:bg-danger/10 hover:text-danger"
+              pendingLabel={null}
+              title="Sil"
+            >
+              <Trash2 size={15} aria-hidden="true" />
+            </SubmitButton>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { createLookup } from "@/lib/data";
 export default async function MemberPage() {
   const { supabase, user, profile } = await requireProfile();
 
-  const [servicesResult, productsResult, typesResult, subcontractorsResult, regionsResult, catalogItemsResult] =
+  const [servicesResult, productsResult, typesResult, subcontractorsResult, regionsResult, catalogItemsResult, customerSitesResult] =
     await Promise.all([
       supabase
         .from("services")
@@ -20,6 +20,7 @@ export default async function MemberPage() {
       supabase.from("subcontractors").select("*").eq("is_active", true).order("name"),
       supabase.from("regions").select("*").eq("is_active", true).order("name"),
       supabase.from("catalog_items").select("*").eq("is_active", true).order("name"),
+      supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
     ]);
 
   const services = servicesResult.data ?? [];
@@ -39,6 +40,7 @@ export default async function MemberPage() {
             action={createServiceAction}
             buttonLabel="Yeni Kayıt"
             catalogItems={catalogItemsResult.data ?? []}
+            customerSites={customerSitesResult.data ?? []}
             members={[]}
             products={productsResult.data ?? []}
             regions={regionsResult.data ?? []}

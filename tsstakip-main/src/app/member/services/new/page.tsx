@@ -10,12 +10,13 @@ export default async function MemberNewServicePage({
 }) {
   const { supabase } = await requireProfile();
   const { error } = await searchParams;
-  const [products, types, subcontractors, regions, catalogItems] = await Promise.all([
+  const [products, types, subcontractors, regions, catalogItems, customerSites] = await Promise.all([
     supabase.from("product_groups").select("*").eq("is_active", true).order("name"),
     supabase.from("service_types").select("*").eq("is_active", true).order("name"),
     supabase.from("subcontractors").select("*").eq("is_active", true).order("name"),
     supabase.from("regions").select("*").eq("is_active", true).order("name"),
     supabase.from("catalog_items").select("*").eq("is_active", true).order("name"),
+    supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
   ]);
 
   return (
@@ -32,6 +33,7 @@ export default async function MemberNewServicePage({
         mode="create"
         products={products.data ?? []}
         catalogItems={catalogItems.data ?? []}
+        customerSites={customerSites.data ?? []}
         regions={regions.data ?? []}
         role="member"
         serviceTypes={types.data ?? []}

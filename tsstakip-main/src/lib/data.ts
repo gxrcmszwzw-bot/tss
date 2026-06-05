@@ -5,6 +5,7 @@ export type Service = Database["public"]["Tables"]["services"]["Row"];
 export type ProductGroup = Database["public"]["Tables"]["product_groups"]["Row"];
 export type ServiceType = Database["public"]["Tables"]["service_types"]["Row"];
 export type Subcontractor = Database["public"]["Tables"]["subcontractors"]["Row"];
+export type CustomerSite = Database["public"]["Tables"]["customer_sites"]["Row"];
 export type CatalogItem = Database["public"]["Tables"]["catalog_items"]["Row"];
 export type CatalogPriceVersion =
   Database["public"]["Tables"]["catalog_price_versions"]["Row"];

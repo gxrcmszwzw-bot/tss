@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/auth";
 import { calculateExpectedRevenue, determineFinanceStatusFromCosts, resolveServiceFinanceBaseline } from "@/lib/finance";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { findTurkeyCity, findTurkeyDistrict } from "@/lib/turkey-locations";
 import type { FeeType, TeamType } from "@/lib/supabase/types";
 
 type OfflineQueueEntry = {
@@ -75,6 +76,54 @@ async function resolveTeamFields(
   };
 }
 
+async function ensureRegionForCityCode(organizationId: string, cityCode: string | null) {
+  if (!cityCode) return null;
+  const admin = getSupabaseAdminClient();
+  const city = findTurkeyCity(cityCode);
+  if (!city) return null;
+
+  const { data: existing, error: existingError } = await admin
+    .from("regions")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("code", city.code)
+    .maybeSingle();
+
+  if (existingError) throw new Error(existingError.message);
+  if (existing) return existing.id;
+
+  const { data: inserted, error: insertError } = await admin
+    .from("regions")
+    .insert({
+      organization_id: organizationId,
+      code: city.code,
+      name: city.name,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !inserted) {
+    throw new Error(insertError?.message ?? "Sehir kaydi olusturulamadi.");
+  }
+
+  return inserted.id;
+}
+
+async function getCustomerSite(organizationId: string, customerSiteId: string | null) {
+  if (!customerSiteId) return null;
+  const admin = getSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("customer_sites")
+    .select("*")
+    .eq("organization_id", organizationId)
+    .eq("id", customerSiteId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 async function handleServiceCreate(entry: OfflineQueueEntry) {
   const session = await getSessionProfile();
   const { supabase, user, profile, activeOrganizationId } = session;
@@ -87,11 +136,15 @@ async function handleServiceCreate(entry: OfflineQueueEntry) {
   const feeType = (payload.fee_type ?? "free") as FeeType;
   const teamType = (payload.team_type ?? "technical_team") as TeamType;
   const status = feeType === "paid" ? "awaiting_approval" : "approved";
+  const customerSiteId = parseNullable(payload.customer_site_id);
+  const customerSite = await getCustomerSite(activeOrganizationId, customerSiteId);
+  const cityCode = parseNullable(payload.city_code) ?? customerSite?.city_code ?? null;
+  const regionId = await ensureRegionForCityCode(activeOrganizationId, cityCode);
 
   const baseline = await resolveServiceFinanceBaseline(
     supabase,
     parseNullable(payload.catalog_item_id),
-    parseNullable(payload.region_id),
+    regionId,
   );
   const assignment = await resolveTeamFields(
     supabase,
@@ -109,12 +162,16 @@ async function handleServiceCreate(entry: OfflineQueueEntry) {
 
   const { error } = await supabase.from("services").insert({
     organization_id: activeOrganizationId,
-    customer_name: payload.customer_name ?? "",
-    customer_phone: payload.customer_phone ?? "",
-    address: payload.address ?? "",
-    district: parseNullable(payload.district),
-    site_id: payload.site_id ?? "",
-    project_name: parseNullable(payload.project_name),
+    customer_name: customerSite?.customer_name ?? payload.customer_name ?? "",
+    customer_phone: customerSite?.customer_phone ?? payload.customer_phone ?? "",
+    address: customerSite?.address ?? payload.address ?? "",
+    district:
+      customerSite?.district_name ??
+      findTurkeyDistrict(cityCode, parseNullable(payload.district))?.name ??
+      parseNullable(payload.district),
+    site_id: customerSite?.site_code ?? payload.site_id ?? "",
+    customer_site_id: customerSiteId,
+    project_name: customerSite?.project_name ?? parseNullable(payload.project_name),
     product_group_id: parseNullable(payload.product_group_id),
     service_type_id: parseNullable(payload.service_type_id),
     member_id: memberId,
@@ -123,7 +180,7 @@ async function handleServiceCreate(entry: OfflineQueueEntry) {
     description: parseNullable(payload.description),
     status,
     team_type: teamType,
-    region_id: parseNullable(payload.region_id),
+    region_id: regionId,
     catalog_item_id: parseNullable(payload.catalog_item_id),
     service_latitude: parseAmount(payload.service_latitude),
     service_longitude: parseAmount(payload.service_longitude),

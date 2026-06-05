@@ -854,25 +854,6 @@ export async function deleteRegionAction(formData: FormData) {
   revalidatePath("/admin/settings");
 }
 
-export async function createRegionalPriceMultiplierAction(formData: FormData) {
-  const { supabase, activeOrganizationId } = await requireAdmin();
-  if (!activeOrganizationId) return;
-  const regionId = await ensureRegionForCityCode(activeOrganizationId, text(formData, "city_code"));
-  const catalogItemId = text(formData, "catalog_item_id");
-  const multiplier = amount(formData, "multiplier");
-  const effectiveFrom = dateTime(text(formData, "effective_from"));
-  if (!regionId || !catalogItemId || multiplier === null || !effectiveFrom) return;
-
-  await supabase.from("regional_price_multipliers").insert({
-    organization_id: activeOrganizationId,
-    region_id: regionId,
-    catalog_item_id: catalogItemId,
-    multiplier,
-    effective_from: effectiveFrom,
-  });
-  revalidatePath("/admin/settings");
-}
-
 export async function importSubcontractorsFromExcelAction(formData: FormData) {
   const { supabase, activeOrganizationId } = await requireAdmin();
   const file = formData.get("file");
@@ -1067,31 +1048,6 @@ export async function syncCustomerSitesFromAirtableAction() {
   }
 }
 
-export async function updateRegionalPriceMultiplierAction(formData: FormData) {
-  const { supabase } = await requireAdmin();
-  const id = text(formData, "id");
-  const multiplier = amount(formData, "multiplier");
-  const effectiveFrom = dateTime(text(formData, "effective_from"));
-  if (!id || multiplier === null || !effectiveFrom) return;
-
-  await supabase
-    .from("regional_price_multipliers")
-    .update({
-      multiplier,
-      effective_from: effectiveFrom,
-    })
-    .eq("id", id);
-  revalidatePath("/admin/settings");
-}
-
-export async function deleteRegionalPriceMultiplierAction(formData: FormData) {
-  const { supabase } = await requireAdmin();
-  const id = text(formData, "id");
-  if (!id) return;
-  await supabase.from("regional_price_multipliers").delete().eq("id", id);
-  revalidatePath("/admin/settings");
-}
-
 export async function updatePhotoRulesAction(formData: FormData) {
   const { supabase } = await requireAdmin();
   await supabase
@@ -1190,17 +1146,16 @@ export async function initializeServiceFinanceAction(formData: FormData) {
   if (!serviceId) return;
 
   const standardPrice = amount(formData, "standard_price_snapshot");
-  const multiplier = amount(formData, "regional_multiplier_snapshot");
   const negotiatedCost = amount(formData, "negotiated_cost");
   const approvedCost = amount(formData, "approved_cost");
-  const expectedRevenue = calculateExpectedRevenue(standardPrice, multiplier);
+  const expectedRevenue = calculateExpectedRevenue(standardPrice, 1);
   const marginEstimate = calculateMarginEstimate(expectedRevenue, approvedCost);
 
   const { error } = await supabase
     .from("services")
     .update({
       standard_price_snapshot: standardPrice,
-      regional_multiplier_snapshot: multiplier ?? 1,
+      regional_multiplier_snapshot: 1,
       expected_revenue: expectedRevenue,
       negotiated_cost: negotiatedCost,
       approved_cost: approvedCost,

@@ -95,6 +95,7 @@ export async function resolveServiceFinanceBaseline(
   regionId: string | null,
 ) {
   const client = supabase as SupabaseLike;
+  void regionId;
   if (!catalogItemId) {
     return {
       standardPriceSnapshot: null,
@@ -120,38 +121,10 @@ export async function resolveServiceFinanceBaseline(
   const standardPriceSnapshot =
     ((priceRows?.[0] as { base_price?: number } | undefined)?.base_price ?? null);
 
-  if (!regionId) {
-    return {
-      standardPriceSnapshot,
-      regionalMultiplierSnapshot: 1,
-      expectedRevenue: calculateExpectedRevenue(standardPriceSnapshot, 1),
-    };
-  }
-
-  const { data: multiplierRows, error: multiplierError } = await client
-    .from("regional_price_multipliers")
-    .select("multiplier")
-    .eq("catalog_item_id", catalogItemId)
-    .eq("region_id", regionId)
-    .lte("effective_from", nowIso)
-    .or(`effective_to.is.null,effective_to.gt.${nowIso}`)
-    .order("effective_from", { ascending: false })
-    .limit(1);
-
-  if (multiplierError) {
-    throw new Error(multiplierError.message);
-  }
-
-  const regionalMultiplierSnapshot =
-    ((multiplierRows?.[0] as { multiplier?: number } | undefined)?.multiplier ?? 1);
-
   return {
     standardPriceSnapshot,
-    regionalMultiplierSnapshot,
-    expectedRevenue: calculateExpectedRevenue(
-      standardPriceSnapshot,
-      regionalMultiplierSnapshot,
-    ),
+    regionalMultiplierSnapshot: 1,
+    expectedRevenue: calculateExpectedRevenue(standardPriceSnapshot, 1),
   };
 }
 

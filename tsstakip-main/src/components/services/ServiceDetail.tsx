@@ -271,7 +271,6 @@ export function ServiceDetail({
           <dl className="divide-y divide-border text-sm">
             <Row label="Finans Durumu" value={financeStatusLabels[service.finance_status]} />
             <Row label="Standart Fiyat" value={formatCurrency(service.standard_price_snapshot, service.currency)} />
-            <Row label="Çarpan" value={service.regional_multiplier_snapshot?.toString() ?? "-"} />
             <Row label="Beklenen Gelir" value={formatCurrency(service.expected_revenue, service.currency)} />
             <Row label="Pazarlık" value={formatCurrency(service.negotiated_cost, service.currency)} />
             <Row label="Onaylı Maliyet" value={formatCurrency(service.approved_cost, service.currency)} />
@@ -440,7 +439,6 @@ export function ServiceDetail({
               <form action={initializeServiceFinanceAction} className="grid gap-3 md:grid-cols-2">
                 <input name="service_id" type="hidden" value={service.id} />
                 <Field label="Standart Fiyat" name="standard_price_snapshot" type="number" value={service.standard_price_snapshot?.toString()} />
-                <Field label="Bölgesel Çarpan" name="regional_multiplier_snapshot" type="number" value={service.regional_multiplier_snapshot?.toString() ?? "1"} />
                 <Field label="Pazarlık Maliyeti" name="negotiated_cost" type="number" value={service.negotiated_cost?.toString()} />
                 <Field label="Onaylı Maliyet" name="approved_cost" type="number" value={service.approved_cost?.toString()} />
                 <div className="md:col-span-2">

@@ -5,8 +5,6 @@ import {
   createCatalogPriceVersionAction,
   createCustomerSiteAction,
   createNotificationTemplateAction,
-  createRegionAction,
-  createRegionalPriceMultiplierAction,
   createProductGroupAction,
   createServiceTypeAction,
   sendNotificationTemplateTestAction,
@@ -14,8 +12,6 @@ import {
   deleteCustomerSiteAction,
   deleteCatalogItemAction,
   deleteNotificationTemplateAction,
-  deleteRegionAction,
-  deleteRegionalPriceMultiplierAction,
   deleteProductGroupAction,
   deleteServiceTypeAction,
   deleteSubcontractorAction,
@@ -26,8 +22,6 @@ import {
   updateCatalogItemAction,
   updateCustomerSiteAction,
   updateNotificationTemplateAction,
-  updateRegionAction,
-  updateRegionalPriceMultiplierAction,
   updatePhotoRulesAction,
   updateProductGroupAction,
   updateServiceTypeAction,
@@ -43,8 +37,6 @@ import type {
   CustomerSite,
   NotificationTemplate,
   ProductGroup,
-  Region,
-  RegionalPriceMultiplier,
   ServiceType,
   Subcontractor,
 } from "@/lib/data";
@@ -52,7 +44,7 @@ import { getTurkeyDistrictsByCityCode, TURKEY_CITIES } from "@/lib/turkey-locati
 
 export default async function SettingsPage() {
   const { supabase } = await requireAdmin();
-  const [products, types, priorities, subcontractors, photoRules, catalogItems, catalogPriceVersions, regions, multipliers, notificationTemplates, customerSites] =
+  const [products, types, priorities, subcontractors, photoRules, catalogItems, catalogPriceVersions, notificationTemplates, customerSites] =
     await Promise.all([
       supabase.from("product_groups").select("*").order("name"),
       supabase.from("service_types").select("*").order("name"),
@@ -61,15 +53,13 @@ export default async function SettingsPage() {
       supabase.from("photo_rules").select("*").limit(1).single(),
       supabase.from("catalog_items").select("*").order("name"),
       supabase.from("catalog_price_versions").select("*").order("effective_from", { ascending: false }),
-      supabase.from("regions").select("*").order("name"),
-      supabase.from("regional_price_multipliers").select("*").order("effective_from", { ascending: false }),
       supabase.from("notification_templates").select("*").order("event_key").order("channel"),
       supabase.from("customer_sites").select("*").order("site_code"),
     ]);
 
   return (
     <>
-      <PageHeader subtitle="Ürün, servis tipi, taşeron, şehir bazlı finans, müşteri/site ve bildirim ayarları" title="Ayarlar" />
+      <PageHeader subtitle="Ürün, servis tipi, taşeron, müşteri/site ve bildirim ayarları" title="Ayarlar" />
       <div className="grid gap-5 lg:grid-cols-2">
 
         {/* Ürün Grupları */}
@@ -266,84 +256,6 @@ export default async function SettingsPage() {
                 />
               ))
             )}
-          </div>
-        </Panel>
-
-        <Panel title="Şehir Bazlı Çarpanlar">
-          <form action={createRegionAction} className="grid gap-2 md:grid-cols-[1fr_auto]">
-            <select
-              className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
-              name="city_code"
-              required
-            >
-              <option value="">Türkiye şehri seç</option>
-              {TURKEY_CITIES.map((city) => (
-                <option key={city.code} value={city.code}>{city.name}</option>
-              ))}
-            </select>
-            <SubmitButton
-              className="flex h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong"
-              pendingLabel="Ekleniyor..."
-            >
-              <Plus size={16} aria-hidden="true" />
-              Şehri Aktifleştir
-            </SubmitButton>
-          </form>
-          <div className="mt-4 space-y-2">
-            {(regions.data ?? []).length === 0 ? <Empty /> : (regions.data ?? []).map((item) => (
-              <RegionRow key={item.id} item={item} />
-            ))}
-          </div>
-          <form action={createRegionalPriceMultiplierAction} className="mt-5 grid gap-2 border-t border-border pt-4 md:grid-cols-2">
-            <select
-              className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
-              name="city_code"
-              required
-            >
-              <option value="">Şehir seç</option>
-              {TURKEY_CITIES.map((city) => (
-                <option key={city.code} value={city.code}>{city.name}</option>
-              ))}
-            </select>
-            <select
-              className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
-              name="catalog_item_id"
-              required
-            >
-              <option value="">İş kalemi seç</option>
-              {(catalogItems.data ?? []).map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-            <input
-              className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
-              name="multiplier"
-              placeholder="Çarpan"
-              required
-              step="0.01"
-              type="number"
-            />
-            <input
-              className="h-11 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
-              name="effective_from"
-              required
-              type="datetime-local"
-            />
-            <SubmitButton
-              className="md:col-span-2 flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-panel text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
-              label="Şehir Çarpanı Ekle"
-              pendingLabel="Ekleniyor..."
-            />
-          </form>
-          <div className="mt-4 space-y-1">
-            {(multipliers.data ?? []).slice(0, 8).map((item) => (
-              <MultiplierRow
-                catalogItems={catalogItems.data ?? []}
-                item={item}
-                key={item.id}
-                regions={regions.data ?? []}
-              />
-            ))}
           </div>
         </Panel>
 
@@ -603,95 +515,6 @@ function CatalogItemRow({
       ) : (
         <p className="mt-3 text-xs text-foreground/55">Henüz fiyat versiyonu yok.</p>
       )}
-    </div>
-  );
-}
-
-function RegionRow({ item }: { item: Region }) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-      <form action={updateRegionAction} className="grid flex-1 gap-2 md:grid-cols-[1fr_120px_auto]">
-        <input name="id" type="hidden" value={item.id} />
-        <input
-          className="h-9 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none transition hover:border-border focus:border-accent focus:bg-panel"
-          defaultValue={item.name}
-          name="name"
-          required
-        />
-        <input
-          className="h-9 rounded-md border border-transparent bg-transparent px-2 text-sm outline-none transition hover:border-border focus:border-accent focus:bg-panel"
-          defaultValue={item.code}
-          name="code"
-          required
-        />
-        <SubmitButton
-          className="inline-flex h-9 items-center justify-center rounded-md border border-border px-3 text-xs font-medium hover:border-accent/40 hover:text-accent"
-          label="Kaydet"
-          pendingLabel="..."
-        />
-      </form>
-      <form action={deleteRegionAction}>
-        <input name="id" type="hidden" value={item.id} />
-        <SubmitButton
-          className="flex h-9 w-9 items-center justify-center rounded-md text-foreground/40 hover:bg-danger/10 hover:text-danger"
-          pendingLabel={null}
-          title="Sil"
-        >
-          <Trash2 size={15} aria-hidden="true" />
-        </SubmitButton>
-      </form>
-    </div>
-  );
-}
-
-function MultiplierRow({
-  catalogItems,
-  item,
-  regions,
-}: {
-  catalogItems: CatalogItem[];
-  item: RegionalPriceMultiplier;
-  regions: Region[];
-}) {
-  const region = regions.find((entry) => entry.id === item.region_id);
-  const catalogItem = catalogItems.find((entry) => entry.id === item.catalog_item_id);
-
-  return (
-    <div className="rounded-md bg-panel-muted px-3 py-2 text-xs">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span>{region?.name ?? "Şehir"} · {catalogItem?.name ?? "İş kalemi"}</span>
-        <form action={deleteRegionalPriceMultiplierAction}>
-          <input name="id" type="hidden" value={item.id} />
-          <SubmitButton
-            className="flex h-7 w-7 items-center justify-center rounded-md text-foreground/40 hover:bg-danger/10 hover:text-danger"
-            pendingLabel={null}
-            title="Sil"
-          >
-            <Trash2 size={13} aria-hidden="true" />
-          </SubmitButton>
-        </form>
-      </div>
-      <form action={updateRegionalPriceMultiplierAction} className="grid gap-2 md:grid-cols-[120px_1fr_auto]">
-        <input name="id" type="hidden" value={item.id} />
-        <input
-          className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-accent"
-          defaultValue={item.multiplier}
-          name="multiplier"
-          step="0.01"
-          type="number"
-        />
-        <input
-          className="h-8 rounded-md border border-border bg-background px-2 text-xs outline-none focus:border-accent"
-          defaultValue={item.effective_from.slice(0, 16)}
-          name="effective_from"
-          type="datetime-local"
-        />
-        <SubmitButton
-          className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 text-xs font-medium hover:border-accent/40 hover:text-accent"
-          label="Kaydet"
-          pendingLabel="..."
-        />
-      </form>
     </div>
   );
 }

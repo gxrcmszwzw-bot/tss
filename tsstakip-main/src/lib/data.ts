@@ -10,8 +10,6 @@ export type CatalogItem = Database["public"]["Tables"]["catalog_items"]["Row"];
 export type CatalogPriceVersion =
   Database["public"]["Tables"]["catalog_price_versions"]["Row"];
 export type Region = Database["public"]["Tables"]["regions"]["Row"];
-export type RegionalPriceMultiplier =
-  Database["public"]["Tables"]["regional_price_multipliers"]["Row"];
 export type PhotoRule = Database["public"]["Tables"]["photo_rules"]["Row"];
 export type ServicePhoto = Database["public"]["Tables"]["service_photos"]["Row"];
 export type ServicePhotoInspection =

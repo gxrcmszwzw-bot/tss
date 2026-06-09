@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
 import { useOfflineSync } from "@/components/offline/OfflineSyncProvider";
@@ -44,6 +45,7 @@ const statuses: ServiceStatus[] = [
   "rejected",
 ];
 const feeTypes: FeeType[] = ["free", "paid", "warranty"];
+const SELECT_PAGE_SIZE = 10;
 
 function inputDateTime(value?: string | null) {
   if (!value) return "";
@@ -69,6 +71,10 @@ export function ServiceForm({
   const [teamType, setTeamType] = useState(initialTeamType);
   const [subcontractorId, setSubcontractorId] = useState(service?.subcontractor_id ?? "");
   const [selectedCustomerSiteId, setSelectedCustomerSiteId] = useState(service?.customer_site_id ?? "");
+  const [customerSiteQuery, setCustomerSiteQuery] = useState("");
+  const [customerSitePage, setCustomerSitePage] = useState(1);
+  const [subcontractorQuery, setSubcontractorQuery] = useState("");
+  const [subcontractorPage, setSubcontractorPage] = useState(1);
   const [offlineMessage, setOfflineMessage] = useState<string | null>(null);
   const { isOnline, refreshQueue } = useOfflineSync();
   const selectedSubcontractor = useMemo(
@@ -84,6 +90,46 @@ export function ServiceForm({
     () => customerSites.find((item) => item.id === selectedCustomerSiteId),
     [customerSites, selectedCustomerSiteId],
   );
+  const filteredCustomerSites = useMemo(() => {
+    const query = customerSiteQuery.trim().toLocaleLowerCase("tr");
+    if (!query) return customerSites;
+
+    return customerSites.filter((item) =>
+      [item.site_code, item.site_name, item.customer_name, item.customer_phone, item.project_name]
+        .filter(Boolean)
+        .some((value) => value?.toLocaleLowerCase("tr").includes(query)),
+    );
+  }, [customerSiteQuery, customerSites]);
+  const customerSiteTotalPages = Math.max(1, Math.ceil(filteredCustomerSites.length / SELECT_PAGE_SIZE));
+  const visibleCustomerSitePage = Math.min(customerSitePage, customerSiteTotalPages);
+  const paginatedCustomerSites = useMemo(() => {
+    const start = (visibleCustomerSitePage - 1) * SELECT_PAGE_SIZE;
+    const pageItems = filteredCustomerSites.slice(start, start + SELECT_PAGE_SIZE);
+    if (selectedCustomerSite && !pageItems.some((item) => item.id === selectedCustomerSite.id)) {
+      return [selectedCustomerSite, ...pageItems].slice(0, SELECT_PAGE_SIZE);
+    }
+    return pageItems;
+  }, [filteredCustomerSites, selectedCustomerSite, visibleCustomerSitePage]);
+  const filteredSubcontractors = useMemo(() => {
+    const query = subcontractorQuery.trim().toLocaleLowerCase("tr");
+    if (!query) return subcontractors;
+
+    return subcontractors.filter((item) =>
+      [item.name, item.contact_name, item.phone]
+        .filter(Boolean)
+        .some((value) => value?.toLocaleLowerCase("tr").includes(query)),
+    );
+  }, [subcontractorQuery, subcontractors]);
+  const subcontractorTotalPages = Math.max(1, Math.ceil(filteredSubcontractors.length / SELECT_PAGE_SIZE));
+  const visibleSubcontractorPage = Math.min(subcontractorPage, subcontractorTotalPages);
+  const paginatedSubcontractors = useMemo(() => {
+    const start = (visibleSubcontractorPage - 1) * SELECT_PAGE_SIZE;
+    const pageItems = filteredSubcontractors.slice(start, start + SELECT_PAGE_SIZE);
+    if (selectedSubcontractor && !pageItems.some((item) => item.id === selectedSubcontractor.id)) {
+      return [selectedSubcontractor, ...pageItems].slice(0, SELECT_PAGE_SIZE);
+    }
+    return pageItems;
+  }, [filteredSubcontractors, selectedSubcontractor, visibleSubcontractorPage]);
   const districtOptions = useMemo(
     () => getTurkeyDistrictsByCityCode(selectedCityCode),
     [selectedCityCode],
@@ -144,6 +190,15 @@ export function ServiceForm({
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-foreground/75">Kayıtlı Site / Müşteri</span>
+            <input
+              className="mb-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
+              onChange={(event) => {
+                setCustomerSiteQuery(event.target.value);
+                setCustomerSitePage(1);
+              }}
+              placeholder="Site, müşteri, telefon ya da proje ara"
+              value={customerSiteQuery}
+            />
             <select
               className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
               name="customer_site_id"
@@ -151,10 +206,16 @@ export function ServiceForm({
               value={selectedCustomerSiteId}
             >
               <option value="">Manuel giriş</option>
-              {customerSites.map((item) => (
+              {paginatedCustomerSites.map((item) => (
                 <option key={item.id} value={item.id}>{item.site_code} · {item.customer_name}</option>
               ))}
             </select>
+            <InlinePager
+              currentPage={visibleCustomerSitePage}
+              onPageChange={setCustomerSitePage}
+              totalItems={filteredCustomerSites.length}
+              totalPages={customerSiteTotalPages}
+            />
           </label>
           <div className="hidden md:block" />
           <Field label="Ad Soyad" name="customer_name" required value={service?.customer_name} />
@@ -271,18 +332,36 @@ export function ServiceForm({
           ) : null}
           {isSubcontractorTeam ? (
             <>
-              <Select
-                label="Taşeron Firma"
-                name="subcontractor_id"
-                onChange={setSubcontractorId}
-                required
-                value={subcontractorId}
-              >
-                <option value="">Seçiniz</option>
-                {subcontractors.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </Select>
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium text-foreground/75">Taşeron Firma</span>
+                <input
+                  className="mb-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
+                  onChange={(event) => {
+                    setSubcontractorQuery(event.target.value);
+                    setSubcontractorPage(1);
+                  }}
+                  placeholder="Firma, sorumlu ya da telefon ara"
+                  value={subcontractorQuery}
+                />
+                <select
+                  className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
+                  name="subcontractor_id"
+                  onChange={(event) => setSubcontractorId(event.target.value)}
+                  required
+                  value={subcontractorId}
+                >
+                  <option value="">Seçiniz</option>
+                  {paginatedSubcontractors.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name}</option>
+                  ))}
+                </select>
+                <InlinePager
+                  currentPage={visibleSubcontractorPage}
+                  onPageChange={setSubcontractorPage}
+                  totalItems={filteredSubcontractors.length}
+                  totalPages={subcontractorTotalPages}
+                />
+              </label>
               <Field
                 label="Taşeron Sorumlu"
                 name="subcontractor_contact"
@@ -418,5 +497,41 @@ function Select({
         {children}
       </select>
     </label>
+  );
+}
+
+function InlinePager({
+  currentPage,
+  totalPages,
+  totalItems,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <div className="mt-2 flex items-center justify-between gap-2 text-xs text-foreground/60">
+      <span>Toplam {totalItems} kayıt · Sayfa {currentPage} / {totalPages}</span>
+      <div className="flex items-center gap-1">
+        <button
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-panel hover:border-accent/40 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={currentPage <= 1}
+          onClick={() => onPageChange(currentPage - 1)}
+          type="button"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <button
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-panel hover:border-accent/40 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={currentPage >= totalPages}
+          onClick={() => onPageChange(currentPage + 1)}
+          type="button"
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
   );
 }

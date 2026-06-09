@@ -42,20 +42,80 @@ import type {
 } from "@/lib/data";
 import { getTurkeyDistrictsByCityCode, TURKEY_CITIES } from "@/lib/turkey-locations";
 
-export default async function SettingsPage() {
+type SettingsPageSearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const PAGE_SIZE = 10;
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function parsePage(value: string | undefined) {
+  const parsed = Number.parseInt(value ?? "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams?: SettingsPageSearchParams;
+}) {
   const { supabase } = await requireAdmin();
+  const params = searchParams ? await searchParams : {};
+  const subcontractorQuery = firstParam(params.subcontractor_q)?.trim() ?? "";
+  const subcontractorCity = firstParam(params.subcontractor_city)?.trim() ?? "";
+  const subcontractorPage = parsePage(firstParam(params.subcontractor_page));
+  const customerSiteQuery = firstParam(params.customer_site_q)?.trim() ?? "";
+  const customerSiteCity = firstParam(params.customer_site_city)?.trim() ?? "";
+  const customerSitePage = parsePage(firstParam(params.customer_site_page));
+
+  let subcontractorsQuery = supabase
+    .from("subcontractors")
+    .select("*", { count: "exact" })
+    .order("name")
+    .range((subcontractorPage - 1) * PAGE_SIZE, subcontractorPage * PAGE_SIZE - 1);
+
+  if (subcontractorQuery) {
+    subcontractorsQuery = subcontractorsQuery.or(
+      `name.ilike.%${subcontractorQuery}%,contact_name.ilike.%${subcontractorQuery}%,phone.ilike.%${subcontractorQuery}%`,
+    );
+  }
+
+  if (subcontractorCity) {
+    subcontractorsQuery = subcontractorsQuery.eq("city_code", subcontractorCity);
+  }
+
+  let customerSitesQuery = supabase
+    .from("customer_sites")
+    .select("*", { count: "exact" })
+    .order("site_code")
+    .range((customerSitePage - 1) * PAGE_SIZE, customerSitePage * PAGE_SIZE - 1);
+
+  if (customerSiteQuery) {
+    customerSitesQuery = customerSitesQuery.or(
+      `site_code.ilike.%${customerSiteQuery}%,site_name.ilike.%${customerSiteQuery}%,customer_name.ilike.%${customerSiteQuery}%,customer_phone.ilike.%${customerSiteQuery}%,project_name.ilike.%${customerSiteQuery}%`,
+    );
+  }
+
+  if (customerSiteCity) {
+    customerSitesQuery = customerSitesQuery.eq("city_code", customerSiteCity);
+  }
+
   const [products, types, priorities, subcontractors, photoRules, catalogItems, catalogPriceVersions, notificationTemplates, customerSites] =
     await Promise.all([
       supabase.from("product_groups").select("*").order("name"),
       supabase.from("service_types").select("*").order("name"),
       supabase.from("priority_settings").select("*").order("sort_order"),
-      supabase.from("subcontractors").select("*").order("name"),
+      subcontractorsQuery,
       supabase.from("photo_rules").select("*").limit(1).single(),
       supabase.from("catalog_items").select("*").order("name"),
       supabase.from("catalog_price_versions").select("*").order("effective_from", { ascending: false }),
       supabase.from("notification_templates").select("*").order("event_key").order("channel"),
-      supabase.from("customer_sites").select("*").order("site_code"),
+      customerSitesQuery,
     ]);
+
+  const subcontractorTotal = subcontractors.count ?? 0;
+  const customerSiteTotal = customerSites.count ?? 0;
 
   return (
     <>
@@ -206,6 +266,18 @@ export default async function SettingsPage() {
               pendingLabel="Yükleniyor..."
             />
           </form>
+          <FilterToolbar
+            cityFieldName="subcontractor_city"
+            cityValue={subcontractorCity}
+            otherFields={[
+              { name: "customer_site_q", value: customerSiteQuery },
+              { name: "customer_site_city", value: customerSiteCity },
+              { name: "customer_site_page", value: String(customerSitePage) },
+            ]}
+            placeholder="Firma, sorumlu ya da telefon ara"
+            queryFieldName="subcontractor_q"
+            queryValue={subcontractorQuery}
+          />
           <div className="mt-4 space-y-2">
             {(subcontractors.data ?? []).length === 0 ? (
               <Empty />
@@ -215,6 +287,19 @@ export default async function SettingsPage() {
               ))
             )}
           </div>
+          <PaginationControls
+            currentPage={subcontractorPage}
+            pageParam="subcontractor_page"
+            pageSize={PAGE_SIZE}
+            totalItems={subcontractorTotal}
+            extraFields={[
+              { name: "subcontractor_q", value: subcontractorQuery },
+              { name: "subcontractor_city", value: subcontractorCity },
+              { name: "customer_site_q", value: customerSiteQuery },
+              { name: "customer_site_city", value: customerSiteCity },
+              { name: "customer_site_page", value: String(customerSitePage) },
+            ]}
+          />
         </Panel>
 
         <Panel title="Finans Katalogu">
@@ -334,6 +419,18 @@ export default async function SettingsPage() {
               Müşteri / Site Ekle
             </SubmitButton>
           </form>
+          <FilterToolbar
+            cityFieldName="customer_site_city"
+            cityValue={customerSiteCity}
+            otherFields={[
+              { name: "subcontractor_q", value: subcontractorQuery },
+              { name: "subcontractor_city", value: subcontractorCity },
+              { name: "subcontractor_page", value: String(subcontractorPage) },
+            ]}
+            placeholder="Site kodu, müşteri, telefon ya da proje ara"
+            queryFieldName="customer_site_q"
+            queryValue={customerSiteQuery}
+          />
           <div className="mt-4 space-y-2">
             {(customerSites.data ?? []).length === 0 ? (
               <Empty />
@@ -343,6 +440,19 @@ export default async function SettingsPage() {
               ))
             )}
           </div>
+          <PaginationControls
+            currentPage={customerSitePage}
+            pageParam="customer_site_page"
+            pageSize={PAGE_SIZE}
+            totalItems={customerSiteTotal}
+            extraFields={[
+              { name: "customer_site_q", value: customerSiteQuery },
+              { name: "customer_site_city", value: customerSiteCity },
+              { name: "subcontractor_q", value: subcontractorQuery },
+              { name: "subcontractor_city", value: subcontractorCity },
+              { name: "subcontractor_page", value: String(subcontractorPage) },
+            ]}
+          />
         </Panel>
 
         {/* Fotoğraf Kuralları */}
@@ -424,6 +534,126 @@ export default async function SettingsPage() {
         </Panel>
       </div>
     </>
+  );
+}
+
+function FilterToolbar({
+  queryFieldName,
+  queryValue,
+  cityFieldName,
+  cityValue,
+  placeholder,
+  otherFields,
+}: {
+  queryFieldName: string;
+  queryValue: string;
+  cityFieldName: string;
+  cityValue: string;
+  placeholder: string;
+  otherFields: Array<{ name: string; value: string }>;
+}) {
+  return (
+    <form className="mt-4 grid gap-2 rounded-lg border border-border bg-panel-muted/40 p-3 md:grid-cols-[1fr_180px_auto]" method="get">
+      {otherFields.map((field) => (
+        <input key={`${field.name}-${field.value}`} name={field.name} type="hidden" value={field.value} />
+      ))}
+      <input
+        className="h-10 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
+        defaultValue={queryValue}
+        name={queryFieldName}
+        placeholder={placeholder}
+      />
+      <select
+        className="h-10 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-accent"
+        defaultValue={cityValue}
+        name={cityFieldName}
+      >
+        <option value="">Tüm şehirler</option>
+        {TURKEY_CITIES.map((city) => (
+          <option key={city.code} value={city.code}>{city.name}</option>
+        ))}
+      </select>
+      <div className="flex gap-2">
+        <button
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-strong"
+          type="submit"
+        >
+          Filtrele
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function PaginationControls({
+  currentPage,
+  totalItems,
+  pageSize,
+  pageParam,
+  extraFields,
+}: {
+  currentPage: number;
+  totalItems: number;
+  pageSize: number;
+  pageParam: string;
+  extraFields: Array<{ name: string; value: string }>;
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-foreground/70">
+      <span>
+        Toplam {totalItems} kayıt · Sayfa {Math.min(currentPage, totalPages)} / {totalPages}
+      </span>
+      <div className="flex items-center gap-2">
+        <PaginationButton
+          disabled={currentPage <= 1}
+          extraFields={extraFields}
+          pageParam={pageParam}
+          targetPage={currentPage - 1}
+        >
+          Önceki
+        </PaginationButton>
+        <PaginationButton
+          disabled={currentPage >= totalPages}
+          extraFields={extraFields}
+          pageParam={pageParam}
+          targetPage={currentPage + 1}
+        >
+          Sonraki
+        </PaginationButton>
+      </div>
+    </div>
+  );
+}
+
+function PaginationButton({
+  targetPage,
+  pageParam,
+  extraFields,
+  disabled,
+  children,
+}: {
+  targetPage: number;
+  pageParam: string;
+  extraFields: Array<{ name: string; value: string }>;
+  disabled: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <form method="get">
+      {extraFields.map((field) => (
+        <input key={`${field.name}-${field.value}`} name={field.name} type="hidden" value={field.value} />
+      ))}
+      <input name={pageParam} type="hidden" value={String(targetPage)} />
+      <button
+        className="inline-flex h-9 items-center justify-center rounded-lg border border-border px-3 text-sm font-medium hover:border-accent/40 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={disabled}
+        type="submit"
+      >
+        {children}
+      </button>
+    </form>
   );
 }
 

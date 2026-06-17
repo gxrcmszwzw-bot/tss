@@ -67,9 +67,15 @@ export function ServiceForm({
 }: ServiceFormProps) {
   const isAdmin = role === "admin";
   const formRef = useRef<HTMLFormElement | null>(null);
+  const initialCatalogItemIds = service?.catalog_item_ids?.length
+    ? service.catalog_item_ids
+    : service?.catalog_item_id
+      ? [service.catalog_item_id]
+      : [];
   const initialTeamType = service?.team_type ?? "technical_team";
   const [teamType, setTeamType] = useState(initialTeamType);
   const [subcontractorId, setSubcontractorId] = useState(service?.subcontractor_id ?? "");
+  const [selectedCatalogItemIds, setSelectedCatalogItemIds] = useState<string[]>(initialCatalogItemIds);
   const [selectedCustomerSiteId, setSelectedCustomerSiteId] = useState(service?.customer_site_id ?? "");
   const [customerSiteQuery, setCustomerSiteQuery] = useState("");
   const [customerSitePage, setCustomerSitePage] = useState(1);
@@ -166,9 +172,10 @@ export function ServiceForm({
     if (!formRef.current) return;
     if (!formRef.current.reportValidity()) return;
     const formData = new FormData(formRef.current);
-    const payload = Object.fromEntries(
-      Array.from(formData.entries()).map(([key, value]) => [key, String(value)]),
-    );
+    const payload = Object.fromEntries(Array.from(formData.keys()).map((key) => {
+      const values = formData.getAll(key).map((value) => String(value));
+      return [key, values.length > 1 ? JSON.stringify(values) : values[0] ?? ""];
+    }));
     enqueueOfflineEntry({
       kind: "service_create",
       payload,
@@ -178,6 +185,7 @@ export function ServiceForm({
     formRef.current.reset();
     setTeamType("technical_team");
     setSubcontractorId("");
+    setSelectedCatalogItemIds([]);
     setSelectedCustomerSiteId("");
     setSelectedCityCode("");
   }
@@ -276,12 +284,23 @@ export function ServiceForm({
               <option key={item.id} value={item.id}>{item.name}</option>
             ))}
           </Select>
-          <Select label="Finans İş Kalemi" name="catalog_item_id" value={service?.catalog_item_id}>
-            <option value="">Seçiniz</option>
-            {catalogItems.map((item) => (
-              <option key={item.id} value={item.id}>{item.name}</option>
-            ))}
-          </Select>
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-medium text-foreground/75">Finans İş Kalemi</span>
+            <select
+              className="min-h-32 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
+              multiple
+              name="catalog_item_ids"
+              onChange={(event) =>
+                setSelectedCatalogItemIds(Array.from(event.target.selectedOptions, (option) => option.value))
+              }
+              value={selectedCatalogItemIds}
+            >
+              {catalogItems.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-foreground/55">Birden fazla seçim yapabilirsiniz. İlk seçilen kayıt finans hesabında ana iş kalemi olarak kullanılır.</p>
+          </label>
           <Select label="Öncelik" name="priority" value={service?.priority ?? "normal"}>
             {priorities.map((priority) => (
               <option key={priority} value={priority}>{priorityLabels[priority]}</option>

@@ -43,6 +43,13 @@ function text(formData: FormData, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function textList(formData: FormData, key: string) {
+  return formData
+    .getAll(key)
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean);
+}
+
 function bool(formData: FormData, key: string) {
   return formData.get(key) === "on";
 }
@@ -296,7 +303,8 @@ export async function createServiceAction(formData: FormData) {
   const customerSite = await getCustomerSiteSnapshot(activeOrganizationId, customerSiteId);
   const cityCode = text(formData, "city_code") ?? customerSite?.city_code ?? null;
   const regionId = await ensureRegionForCityCode(activeOrganizationId, cityCode);
-  const catalogItemId = text(formData, "catalog_item_id");
+  const catalogItemIds = textList(formData, "catalog_item_ids");
+  const catalogItemId = catalogItemIds[0] ?? null;
   const assignment = await teamFields(supabase, teamType, text(formData, "subcontractor_id"));
   const financeBaseline = await resolveServiceFinanceBaseline(
     supabase,
@@ -319,6 +327,7 @@ export async function createServiceAction(formData: FormData) {
       service_type_id: text(formData, "service_type_id"),
       region_id: regionId,
       catalog_item_id: catalogItemId,
+      catalog_item_ids: catalogItemIds,
       service_latitude: amount(formData, "service_latitude"),
       service_longitude: amount(formData, "service_longitude"),
       geofence_radius_meters: amount(formData, "geofence_radius_meters") ?? 150,
@@ -368,7 +377,8 @@ export async function updateServiceAction(formData: FormData) {
   const customerSite = await getCustomerSiteSnapshot(activeOrganizationId, customerSiteId);
   const cityCode = text(formData, "city_code") ?? customerSite?.city_code ?? null;
   const regionId = activeOrganizationId ? await ensureRegionForCityCode(activeOrganizationId, cityCode) : null;
-  const catalogItemId = text(formData, "catalog_item_id");
+  const catalogItemIds = textList(formData, "catalog_item_ids");
+  const catalogItemId = catalogItemIds[0] ?? null;
   const assignment = await teamFields(supabase, teamType, text(formData, "subcontractor_id"));
   const financeBaseline = await resolveServiceFinanceBaseline(
     supabase,
@@ -390,6 +400,7 @@ export async function updateServiceAction(formData: FormData) {
       service_type_id: text(formData, "service_type_id"),
       region_id: regionId,
       catalog_item_id: catalogItemId,
+      catalog_item_ids: catalogItemIds,
       service_latitude: amount(formData, "service_latitude"),
       service_longitude: amount(formData, "service_longitude"),
       geofence_radius_meters: amount(formData, "geofence_radius_meters") ?? 150,

@@ -427,6 +427,7 @@ export type Database = {
           subcontractor_phone: string | null;
           region_id: string | null;
           catalog_item_id: string | null;
+          catalog_item_ids: string[];
           service_latitude: number | null;
           service_longitude: number | null;
           geofence_radius_meters: number;
@@ -484,6 +485,7 @@ export type Database = {
           subcontractor_phone?: string | null;
           region_id?: string | null;
           catalog_item_id?: string | null;
+          catalog_item_ids?: string[];
           service_latitude?: number | null;
           service_longitude?: number | null;
           geofence_radius_meters?: number;

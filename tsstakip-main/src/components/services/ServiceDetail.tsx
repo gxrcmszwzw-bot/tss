@@ -118,7 +118,14 @@ export function ServiceDetail({
 }: ServiceDetailProps) {
   const product = products.find((item) => item.id === service.product_group_id);
   const region = regions.find((item) => item.id === service.region_id);
-  const catalogItem = catalogItems.find((item) => item.id === service.catalog_item_id);
+  const catalogItemIds = service.catalog_item_ids?.length
+    ? service.catalog_item_ids
+    : service.catalog_item_id
+      ? [service.catalog_item_id]
+      : [];
+  const catalogItemNames = catalogItemIds
+    .map((catalogItemId) => catalogItems.find((item) => item.id === catalogItemId)?.name)
+    .filter((name): name is string => Boolean(name));
   const type = serviceTypes.find((item) => item.id === service.service_type_id);
   const member = members.find((item) => item.id === service.member_id);
   const photoInspectionByPhotoId = new Map(
@@ -156,7 +163,7 @@ export function ServiceDetail({
             />
             <Row label="Ürün Grubu" value={product?.name ?? "—"} />
             <Row label="Servis Tipi" value={type?.name ?? "—"} />
-            <Row label="İş Kalemi" value={catalogItem?.name ?? "—"} />
+            <Row label="İş Kalemi" value={catalogItemNames.length ? catalogItemNames.join(", ") : "—"} />
             <Row label="Ekip Tipi" value={teamLabels[service.team_type]} />
             <Row label="Üye" value={member?.full_name ?? "—"} />
             {service.team_type === "subcontractor" ? (

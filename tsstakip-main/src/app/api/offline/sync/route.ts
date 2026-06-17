@@ -31,6 +31,16 @@ function parseNullable(value: string | undefined) {
   return value && value.trim() ? value.trim() : null;
 }
 
+function parseStringArray(value: string | undefined) {
+  if (!value?.trim()) return [] as string[];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((item) => String(item).trim()).filter(Boolean) : [];
+  } catch {
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+}
+
 function parseAmount(value: string | undefined) {
   if (!value || !value.trim()) return null;
   const parsed = Number(value.replace(",", "."));
@@ -141,11 +151,9 @@ async function handleServiceCreate(entry: OfflineQueueEntry) {
   const cityCode = parseNullable(payload.city_code) ?? customerSite?.city_code ?? null;
   const regionId = await ensureRegionForCityCode(activeOrganizationId, cityCode);
 
-  const baseline = await resolveServiceFinanceBaseline(
-    supabase,
-    parseNullable(payload.catalog_item_id),
-    regionId,
-  );
+  const catalogItemIds = parseStringArray(payload.catalog_item_ids);
+  const primaryCatalogItemId = catalogItemIds[0] ?? parseNullable(payload.catalog_item_id);
+  const baseline = await resolveServiceFinanceBaseline(supabase, primaryCatalogItemId, regionId);
   const assignment = await resolveTeamFields(
     supabase,
     teamType,
@@ -181,7 +189,8 @@ async function handleServiceCreate(entry: OfflineQueueEntry) {
     status,
     team_type: teamType,
     region_id: regionId,
-    catalog_item_id: parseNullable(payload.catalog_item_id),
+    catalog_item_id: primaryCatalogItemId,
+    catalog_item_ids: catalogItemIds,
     service_latitude: parseAmount(payload.service_latitude),
     service_longitude: parseAmount(payload.service_longitude),
     geofence_radius_meters: parseAmount(payload.geofence_radius_meters) ?? 150,

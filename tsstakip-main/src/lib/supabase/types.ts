@@ -324,6 +324,246 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["customer_sites"]["Insert"]>;
         Relationships: [];
       };
+      contracts: {
+        Row: {
+          id: string;
+          organization_id: string;
+          contract_no: string;
+          contract_type: string;
+          customer_name: string;
+          status: string;
+          lifecycle_stage: string;
+          primary_site_id: string | null;
+          technical_owner_id: string | null;
+          commercial_owner_id: string | null;
+          start_date: string | null;
+          end_date: string | null;
+          renewal_date: string | null;
+          summary: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          organization_id: string;
+          contract_no: string;
+          contract_type: string;
+          customer_name: string;
+          status?: string;
+          lifecycle_stage?: string;
+          primary_site_id?: string | null;
+          technical_owner_id?: string | null;
+          commercial_owner_id?: string | null;
+          start_date?: string | null;
+          end_date?: string | null;
+          renewal_date?: string | null;
+          summary?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["contracts"]["Insert"]>;
+        Relationships: [];
+      };
+      contract_sites: {
+        Row: {
+          id: string;
+          contract_id: string;
+          site_id: string;
+          role: string;
+          is_primary: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          site_id: string;
+          role?: string;
+          is_primary?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["contract_sites"]["Insert"]>;
+        Relationships: [];
+      };
+      contract_modules: {
+        Row: {
+          id: string;
+          contract_id: string;
+          module_key: string;
+          is_enabled: boolean;
+          started_at: string | null;
+          ended_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          module_key: string;
+          is_enabled?: boolean;
+          started_at?: string | null;
+          ended_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["contract_modules"]["Insert"]>;
+        Relationships: [];
+      };
+      contract_products: {
+        Row: {
+          id: string;
+          contract_id: string;
+          catalog_item_id: string | null;
+          product_name_snapshot: string;
+          quantity: number;
+          unit: string | null;
+          requires_installation: boolean;
+          is_iot_related: boolean;
+          is_service_covered: boolean;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          catalog_item_id?: string | null;
+          product_name_snapshot: string;
+          quantity?: number;
+          unit?: string | null;
+          requires_installation?: boolean;
+          is_iot_related?: boolean;
+          is_service_covered?: boolean;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["contract_products"]["Insert"]>;
+        Relationships: [];
+      };
+      projects: {
+        Row: {
+          id: string;
+          contract_id: string;
+          name: string;
+          status: string;
+          planned_start_at: string | null;
+          planned_end_at: string | null;
+          actual_start_at: string | null;
+          actual_end_at: string | null;
+          project_manager_id: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          name: string;
+          status?: string;
+          planned_start_at?: string | null;
+          planned_end_at?: string | null;
+          actual_start_at?: string | null;
+          actual_end_at?: string | null;
+          project_manager_id?: string | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["projects"]["Insert"]>;
+        Relationships: [];
+      };
+      project_phases: {
+        Row: {
+          id: string;
+          project_id: string;
+          phase_key: string;
+          status: string;
+          planned_start_at: string | null;
+          planned_end_at: string | null;
+          completed_at: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          phase_key: string;
+          status?: string;
+          planned_start_at?: string | null;
+          planned_end_at?: string | null;
+          completed_at?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["project_phases"]["Insert"]>;
+        Relationships: [];
+      };
+      installation_tasks: {
+        Row: {
+          id: string;
+          project_phase_id: string;
+          contract_id: string;
+          site_id: string | null;
+          title: string;
+          task_type: string;
+          status: string;
+          assigned_team: string | null;
+          assigned_member_id: string | null;
+          assigned_subcontractor_id: string | null;
+          planned_at: string | null;
+          completed_at: string | null;
+          depends_on_task_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_phase_id: string;
+          contract_id: string;
+          site_id?: string | null;
+          title: string;
+          task_type: string;
+          status?: string;
+          assigned_team?: string | null;
+          assigned_member_id?: string | null;
+          assigned_subcontractor_id?: string | null;
+          planned_at?: string | null;
+          completed_at?: string | null;
+          depends_on_task_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["installation_tasks"]["Insert"]>;
+        Relationships: [];
+      };
+      installation_deliverables: {
+        Row: {
+          id: string;
+          contract_id: string;
+          project_id: string;
+          deliverable_type: string;
+          status: string;
+          delivered_at: string | null;
+          delivered_by: string | null;
+          approval_required: boolean;
+          approved_at: string | null;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          contract_id: string;
+          project_id: string;
+          deliverable_type: string;
+          status?: string;
+          delivered_at?: string | null;
+          delivered_by?: string | null;
+          approval_required?: boolean;
+          approved_at?: string | null;
+          notes?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["installation_deliverables"]["Insert"]>;
+        Relationships: [];
+      };
       product_groups: {
         Row: {
           id: string;
@@ -425,6 +665,9 @@ export type Database = {
           subcontractor_id: string | null;
           subcontractor_contact: string | null;
           subcontractor_phone: string | null;
+          contract_id: string | null;
+          project_id: string | null;
+          contract_site_id: string | null;
           region_id: string | null;
           catalog_item_id: string | null;
           catalog_item_ids: string[];
@@ -483,6 +726,9 @@ export type Database = {
           subcontractor_id?: string | null;
           subcontractor_contact?: string | null;
           subcontractor_phone?: string | null;
+          contract_id?: string | null;
+          project_id?: string | null;
+          contract_site_id?: string | null;
           region_id?: string | null;
           catalog_item_id?: string | null;
           catalog_item_ids?: string[];

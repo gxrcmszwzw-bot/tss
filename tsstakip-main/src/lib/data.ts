@@ -6,6 +6,16 @@ export type ProductGroup = Database["public"]["Tables"]["product_groups"]["Row"]
 export type ServiceType = Database["public"]["Tables"]["service_types"]["Row"];
 export type Subcontractor = Database["public"]["Tables"]["subcontractors"]["Row"];
 export type CustomerSite = Database["public"]["Tables"]["customer_sites"]["Row"];
+export type Contract = Database["public"]["Tables"]["contracts"]["Row"];
+export type ContractSite = Database["public"]["Tables"]["contract_sites"]["Row"];
+export type ContractModule = Database["public"]["Tables"]["contract_modules"]["Row"];
+export type ContractProduct = Database["public"]["Tables"]["contract_products"]["Row"];
+export type Project = Database["public"]["Tables"]["projects"]["Row"];
+export type ProjectPhase = Database["public"]["Tables"]["project_phases"]["Row"];
+export type InstallationTask =
+  Database["public"]["Tables"]["installation_tasks"]["Row"];
+export type InstallationDeliverable =
+  Database["public"]["Tables"]["installation_deliverables"]["Row"];
 export type CatalogItem = Database["public"]["Tables"]["catalog_items"]["Row"];
 export type CatalogPriceVersion =
   Database["public"]["Tables"]["catalog_price_versions"]["Row"];

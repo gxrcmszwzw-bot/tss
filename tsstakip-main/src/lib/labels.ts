@@ -15,6 +15,7 @@ import type {
   ServiceStatus,
   TeamType,
 } from "@/lib/supabase/types";
+import type { ContractLifecycleStage } from "@/lib/contracts";
 
 export const statusLabels: Record<ServiceStatus, string> = {
   pending: "Bekliyor",
@@ -134,6 +135,44 @@ export const notificationDeliveryStatusLabels: Record<NotificationDeliveryStatus
   processing: "İşleniyor",
   sent: "Gönderildi",
   failed: "Hata",
+  canceled: "İptal",
+};
+
+export const contractStatusLabels: Record<string, string> = {
+  draft: "Taslak",
+  approved: "Onaylandı",
+  active: "Aktif",
+  suspended: "Askıda",
+  closed: "Kapandı",
+};
+
+export const contractLifecycleLabels: Record<ContractLifecycleStage, string> = {
+  draft: "Taslak",
+  approved: "Onaylandı",
+  procurement_pending: "Satın Alma Bekliyor",
+  installation_planned: "Kurulum Planlandı",
+  installation_in_progress: "Kurulum Devam Ediyor",
+  partially_live: "Kısmen Canlı",
+  live: "Canlı",
+  support_phase: "Destek Fazı",
+  renewal_due: "Yenileme Yaklaşıyor",
+  closed: "Kapandı",
+};
+
+export const projectStatusLabels: Record<string, string> = {
+  planned: "Planlandı",
+  pending: "Bekliyor",
+  in_progress: "Devam Ediyor",
+  live: "Canlı",
+  completed: "Tamamlandı",
+  canceled: "İptal",
+};
+
+export const installationTaskStatusLabels: Record<string, string> = {
+  pending: "Bekliyor",
+  in_progress: "Devam Ediyor",
+  blocked: "Bloklu",
+  completed: "Tamamlandı",
   canceled: "İptal",
 };
 

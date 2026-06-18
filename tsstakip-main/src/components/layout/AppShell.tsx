@@ -97,8 +97,20 @@ export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
 export const adminNav: NavItem[] = [
   { href: "/admin", label: "Dashboard" },
   {
+    href: "/admin/contracts",
+    label: "Sozlesme Merkezi",
+    children: [
+      { href: "/admin/contracts", label: "Sozlesmeler" },
+      { href: "/admin/sites", label: "Siteler" },
+    ],
+  },
+  {
     href: "/admin/services",
-    label: "Servisler",
+    label: "Servis ve Destek",
+    children: [
+      { href: "/admin/services", label: "Servisler" },
+      { href: "/admin/services/new", label: "Yeni Servis" },
+    ],
   },
   { href: "/admin/notifications", label: "Bildirimler" },
   { href: "/admin/finance-audit", label: "Finans Denetim" },

@@ -11,7 +11,7 @@ export default async function AdminServiceDetailPage({
 }) {
   const { id } = await params;
   const { supabase } = await requireAdmin();
-  const [service, products, types, members, subcontractors, photos, photoRules, negotiations, invoices, regions, catalogItems, voiceNotes, photoInspections, customerSites] = await Promise.all([
+  const [service, products, types, members, subcontractors, photos, photoRules, negotiations, invoices, regions, catalogItems, voiceNotes, photoInspections, customerSites, contracts, contractSites, projects] = await Promise.all([
     supabase.from("services").select("*").eq("id", id).single(),
     supabase.from("product_groups").select("*").eq("is_active", true).order("name"),
     supabase.from("service_types").select("*").eq("is_active", true).order("name"),
@@ -26,6 +26,9 @@ export default async function AdminServiceDetailPage({
     supabase.from("service_voice_notes").select("*").eq("service_id", id).order("created_at", { ascending: false }),
     supabase.from("service_photo_inspections").select("*").eq("service_id", id).order("created_at", { ascending: false }),
     supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
+    supabase.from("contracts").select("*").order("created_at", { ascending: false }),
+    supabase.from("contract_sites").select("*").order("created_at", { ascending: false }),
+    supabase.from("projects").select("*").order("created_at", { ascending: false }),
   ]);
 
   if (!service.data) notFound();
@@ -40,8 +43,11 @@ export default async function AdminServiceDetailPage({
         products={products.data ?? []}
         catalogItems={catalogItems.data ?? []}
         customerSites={customerSites.data ?? []}
+        contracts={contracts.data ?? []}
+        contractSites={contractSites.data ?? []}
         photos={photos.data ?? []}
         photoInspections={photoInspections.data ?? []}
+        projects={projects.data ?? []}
         regions={regions.data ?? []}
         role="admin"
         service={service.data}

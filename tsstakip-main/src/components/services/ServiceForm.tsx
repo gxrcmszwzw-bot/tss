@@ -7,7 +7,10 @@ import { useOfflineSync } from "@/components/offline/OfflineSyncProvider";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type {
   CatalogItem,
+  Contract,
+  ContractSite,
   CustomerSite,
+  Project,
   ProductGroup,
   Profile,
   Region,
@@ -26,6 +29,9 @@ type ServiceFormProps = {
   products: ProductGroup[];
   catalogItems: CatalogItem[];
   customerSites: CustomerSite[];
+  contracts?: Contract[];
+  contractSites?: ContractSite[];
+  projects?: Project[];
   regions: Region[];
   serviceTypes: ServiceType[];
   members: Profile[];
@@ -58,6 +64,9 @@ export function ServiceForm({
   products,
   catalogItems,
   customerSites,
+  contracts = [],
+  contractSites = [],
+  projects = [],
   regions,
   serviceTypes,
   members,
@@ -77,6 +86,9 @@ export function ServiceForm({
   const [subcontractorId, setSubcontractorId] = useState(service?.subcontractor_id ?? "");
   const [selectedCatalogItemIds, setSelectedCatalogItemIds] = useState<string[]>(initialCatalogItemIds);
   const [selectedCustomerSiteId, setSelectedCustomerSiteId] = useState(service?.customer_site_id ?? "");
+  const [selectedContractId, setSelectedContractId] = useState(service?.contract_id ?? "");
+  const [selectedProjectId, setSelectedProjectId] = useState(service?.project_id ?? "");
+  const [selectedContractSiteId, setSelectedContractSiteId] = useState(service?.contract_site_id ?? "");
   const [customerSiteQuery, setCustomerSiteQuery] = useState("");
   const [customerSitePage, setCustomerSitePage] = useState(1);
   const [subcontractorQuery, setSubcontractorQuery] = useState("");
@@ -96,6 +108,30 @@ export function ServiceForm({
     () => customerSites.find((item) => item.id === selectedCustomerSiteId),
     [customerSites, selectedCustomerSiteId],
   );
+  const visibleContractLinks = useMemo(() => {
+    return contractSites.filter((item) => {
+      if (selectedCustomerSiteId && item.site_id !== selectedCustomerSiteId) return false;
+      if (selectedContractId && item.contract_id !== selectedContractId) return false;
+      return true;
+    });
+  }, [contractSites, selectedContractId, selectedCustomerSiteId]);
+  const visibleContracts = useMemo(() => {
+    if (!selectedCustomerSiteId) return contracts;
+    const linkedContractIds = new Set(visibleContractLinks.map((item) => item.contract_id));
+    return contracts.filter((item) => item.primary_site_id === selectedCustomerSiteId || linkedContractIds.has(item.id));
+  }, [contracts, selectedCustomerSiteId, visibleContractLinks]);
+  const visibleProjects = useMemo(() => {
+    if (!selectedContractId) return projects;
+    return projects.filter((item) => item.contract_id === selectedContractId);
+  }, [projects, selectedContractId]);
+  const visibleContractSites = useMemo(() => {
+    if (!selectedContractId && !selectedCustomerSiteId) return contractSites;
+    return contractSites.filter((item) => {
+      if (selectedContractId && item.contract_id !== selectedContractId) return false;
+      if (selectedCustomerSiteId && item.site_id !== selectedCustomerSiteId) return false;
+      return true;
+    });
+  }, [contractSites, selectedContractId, selectedCustomerSiteId]);
   const filteredCustomerSites = useMemo(() => {
     const query = customerSiteQuery.trim().toLocaleLowerCase("tr");
     if (!query) return customerSites;
@@ -168,6 +204,56 @@ export function ServiceForm({
     setFieldValue("district", site.district_name ?? "");
   }
 
+  function findMatchingContractSiteId(contractId: string, siteId: string) {
+    if (!contractId || !siteId) return "";
+    const primaryMatch = contractSites.find(
+      (item) => item.contract_id === contractId && item.site_id === siteId && item.is_primary,
+    );
+    if (primaryMatch) return primaryMatch.id;
+    return contractSites.find((item) => item.contract_id === contractId && item.site_id === siteId)?.id ?? "";
+  }
+
+  function handleCustomerSiteChange(siteId: string) {
+    applyCustomerSite(siteId);
+    if (!selectedContractId) {
+      setSelectedContractSiteId("");
+      return;
+    }
+
+    const nextContractSiteId = findMatchingContractSiteId(selectedContractId, siteId);
+    if (nextContractSiteId) {
+      setSelectedContractSiteId(nextContractSiteId);
+      return;
+    }
+
+    setSelectedContractId("");
+    setSelectedProjectId("");
+    setSelectedContractSiteId("");
+  }
+
+  function handleContractChange(contractId: string) {
+    setSelectedContractId(contractId);
+
+    if (!contractId) {
+      setSelectedProjectId("");
+      setSelectedContractSiteId("");
+      return;
+    }
+
+    const selectedContract = contracts.find((item) => item.id === contractId);
+    if (!selectedCustomerSiteId && selectedContract?.primary_site_id) {
+      applyCustomerSite(selectedContract.primary_site_id);
+      setSelectedContractSiteId(findMatchingContractSiteId(contractId, selectedContract.primary_site_id));
+    } else {
+      setSelectedContractSiteId(findMatchingContractSiteId(contractId, selectedCustomerSiteId));
+    }
+
+    const projectStillMatches = projects.some((item) => item.id === selectedProjectId && item.contract_id === contractId);
+    if (!projectStillMatches) {
+      setSelectedProjectId("");
+    }
+  }
+
   function queueOfflineCreate() {
     if (!formRef.current) return;
     if (!formRef.current.reportValidity()) return;
@@ -187,6 +273,9 @@ export function ServiceForm({
     setSubcontractorId("");
     setSelectedCatalogItemIds([]);
     setSelectedCustomerSiteId("");
+    setSelectedContractId("");
+    setSelectedProjectId("");
+    setSelectedContractSiteId("");
     setSelectedCityCode("");
   }
 
@@ -210,7 +299,7 @@ export function ServiceForm({
             <select
               className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
               name="customer_site_id"
-              onChange={(event) => applyCustomerSite(event.target.value)}
+              onChange={(event) => handleCustomerSiteChange(event.target.value)}
               value={selectedCustomerSiteId}
             >
               <option value="">Manuel giriş</option>
@@ -259,6 +348,38 @@ export function ServiceForm({
           </label>
           <Field label="Site ID" name="site_id" required value={service?.site_id} />
           <Field className="md:col-span-2" label="Proje Adı" name="project_name" value={service?.project_name} />
+          <Select label="Sozlesme" name="contract_id" onChange={handleContractChange} value={selectedContractId}>
+            <option value="">Seciniz</option>
+            {visibleContracts.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.contract_no} · {item.contract_type}
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Sozlesme Site Baglantisi"
+            name="contract_site_id"
+            onChange={setSelectedContractSiteId}
+            value={selectedContractSiteId}
+          >
+            <option value="">Seciniz</option>
+            {visibleContractSites.map((item) => {
+              const site = customerSites.find((customerSite) => customerSite.id === item.site_id);
+              return (
+                <option key={item.id} value={item.id}>
+                  {(site?.site_code ?? item.site_id)} · {item.role}
+                </option>
+              );
+            })}
+          </Select>
+          <Select label="Bagli Proje" name="project_id" onChange={setSelectedProjectId} value={selectedProjectId}>
+            <option value="">Seciniz</option>
+            {visibleProjects.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </Select>
           {isAdmin ? (
             <>
               <Field label="Servis Enlem" name="service_latitude" type="number" value={service?.service_latitude?.toString()} />
@@ -508,7 +629,7 @@ function Select({
       <span className="mb-1.5 block text-sm font-medium text-foreground/75">{label}</span>
       <select
         className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15"
-        defaultValue={value ?? ""}
+        value={value ?? ""}
         name={name}
         onChange={onChange ? (event) => onChange(event.target.value) : undefined}
         required={required}

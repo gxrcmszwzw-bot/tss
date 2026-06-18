@@ -31,7 +31,10 @@ import type {
   Region,
   Service,
   CatalogItem,
+  Contract,
+  ContractSite,
   CustomerSite,
+  Project,
   ServiceVoiceNote,
   ServiceInvoice,
   ServiceNegotiation,
@@ -71,6 +74,9 @@ type ServiceDetailProps = {
   products: ProductGroup[];
   catalogItems: CatalogItem[];
   customerSites: CustomerSite[];
+  contracts?: Contract[];
+  contractSites?: ContractSite[];
+  projects?: Project[];
   regions: Region[];
   serviceTypes: ServiceType[];
   members: Profile[];
@@ -104,6 +110,9 @@ export function ServiceDetail({
   products,
   catalogItems,
   customerSites,
+  contracts = [],
+  contractSites = [],
+  projects = [],
   regions,
   serviceTypes,
   members,
@@ -128,6 +137,10 @@ export function ServiceDetail({
     .filter((name): name is string => Boolean(name));
   const type = serviceTypes.find((item) => item.id === service.service_type_id);
   const member = members.find((item) => item.id === service.member_id);
+  const contract = contracts.find((item) => item.id === service.contract_id);
+  const project = projects.find((item) => item.id === service.project_id);
+  const contractSite = contractSites.find((item) => item.id === service.contract_site_id);
+  const linkedSite = customerSites.find((item) => item.id === contractSite?.site_id);
   const photoInspectionByPhotoId = new Map(
     photoInspections.map((inspection) => [inspection.photo_id, inspection]),
   );
@@ -153,6 +166,12 @@ export function ServiceDetail({
             <Row label="İlçe" value={service.district ?? "—"} />
             <Row label="Site ID" value={service.site_id} />
             <Row label="Proje" value={service.project_name ?? "—"} />
+            <Row label="Sozlesme" value={contract ? `${contract.contract_no} · ${contract.contract_type}` : "—"} />
+            <Row label="Bagli Proje" value={project?.name ?? "—"} />
+            <Row
+              label="Sozlesme Sitesi"
+              value={linkedSite ? `${linkedSite.site_code} · ${linkedSite.customer_name}` : "—"}
+            />
             <Row
               label="Geofence"
               value={
@@ -219,6 +238,24 @@ export function ServiceDetail({
               }
             />
           </dl>
+          {contract ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
+                href={`/admin/contracts/${contract.id}`}
+              >
+                Sozlesmeye Git
+              </a>
+              {linkedSite ? (
+                <a
+                  className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
+                  href={`/admin/sites/${linkedSite.id}`}
+                >
+                  Site Kartini Ac
+                </a>
+              ) : null}
+            </div>
+          ) : null}
           {service.public_tracking_enabled ? (
             <div className="mt-3 flex flex-wrap gap-2">
               <a
@@ -637,9 +674,12 @@ export function ServiceDetail({
               action={updateServiceAction}
               catalogItems={catalogItems}
               customerSites={customerSites}
+              contracts={contracts}
+              contractSites={contractSites}
               members={members}
               mode="edit"
               products={products}
+              projects={projects}
               regions={regions}
               role="admin"
               service={service}

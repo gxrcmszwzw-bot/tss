@@ -8,7 +8,7 @@ import { createLookup } from "@/lib/data";
 export default async function MemberPage() {
   const { supabase, user, profile } = await requireProfile();
 
-  const [servicesResult, productsResult, typesResult, subcontractorsResult, regionsResult, catalogItemsResult, customerSitesResult] =
+  const [servicesResult, productsResult, typesResult, subcontractorsResult, regionsResult, catalogItemsResult, customerSitesResult, contractsResult, contractSitesResult, projectsResult] =
     await Promise.all([
       supabase
         .from("services")
@@ -21,6 +21,9 @@ export default async function MemberPage() {
       supabase.from("regions").select("*").eq("is_active", true).order("name"),
       supabase.from("catalog_items").select("*").eq("is_active", true).order("name"),
       supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
+      supabase.from("contracts").select("*").order("created_at", { ascending: false }),
+      supabase.from("contract_sites").select("*").order("created_at", { ascending: false }),
+      supabase.from("projects").select("*").order("created_at", { ascending: false }),
     ]);
 
   const services = servicesResult.data ?? [];
@@ -41,8 +44,11 @@ export default async function MemberPage() {
             buttonLabel="Yeni Kayıt"
             catalogItems={catalogItemsResult.data ?? []}
             customerSites={customerSitesResult.data ?? []}
+            contracts={contractsResult.data ?? []}
+            contractSites={contractSitesResult.data ?? []}
             members={[]}
             products={productsResult.data ?? []}
+            projects={projectsResult.data ?? []}
             regions={regionsResult.data ?? []}
             role="member"
             serviceTypes={typesResult.data ?? []}

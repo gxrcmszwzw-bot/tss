@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import {
   createServiceAction,
   processPendingPhotoInspectionsAction,
@@ -46,6 +48,10 @@ export default async function AdminPage({
     subcontractorNamesResult,
     notificationDeliveriesResult,
     customerSitesResult,
+    contractsResult,
+    contractSitesResult,
+    projectsResult,
+    installationTasksResult,
   ] = await Promise.all([
     supabase.from("services").select("*").order("created_at", { ascending: false }),
     supabase.from("product_groups").select("*").order("name"),
@@ -76,6 +82,10 @@ export default async function AdminPage({
       .order("created_at", { ascending: true })
       .limit(8),
     supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
+    supabase.from("contracts").select("*").order("created_at", { ascending: false }),
+    supabase.from("contract_sites").select("*").order("created_at", { ascending: false }),
+    supabase.from("projects").select("*").order("created_at", { ascending: false }),
+    supabase.from("installation_tasks").select("*").order("created_at", { ascending: false }),
   ]);
 
   const services = servicesResult.data ?? [];
@@ -105,6 +115,9 @@ export default async function AdminPage({
   const pendingNotifications = notificationQueue.filter((item) => item.status === "pending").length;
   const failedNotifications = notificationQueue.filter((item) => item.status === "failed").length;
   const processingNotifications = notificationQueue.filter((item) => item.status === "processing").length;
+  const contracts = contractsResult.data ?? [];
+  const projects = projectsResult.data ?? [];
+  const installationTasks = installationTasksResult.data ?? [];
 
   const stats = [
     { label: "Bugün Açılan", value: todayServices.length },
@@ -137,8 +150,11 @@ export default async function AdminPage({
             buttonLabel="Yeni Servis"
             catalogItems={catalogItemsResult.data ?? []}
             customerSites={customerSitesResult.data ?? []}
+            contracts={contracts}
+            contractSites={contractSitesResult.data ?? []}
             members={membersResult.data ?? []}
             products={productsResult.data ?? []}
+            projects={projects}
             regions={regionsResult.data ?? []}
             role="admin"
             serviceTypes={typesResult.data ?? []}
@@ -185,6 +201,34 @@ export default async function AdminPage({
       </section>
 
       <section className="mt-5 grid gap-4 xl:grid-cols-3">
+        <div className="rounded-xl border border-border bg-panel p-4" style={{ boxShadow: "var(--shadow-sm)" }}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Sozlesme Merkezi</h2>
+              <p className="text-sm text-foreground/55">Yeni ortak lookup omurgasi</p>
+            </div>
+            <Link
+              className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground hover:border-accent/40 hover:text-accent"
+              href="/admin/contracts"
+            >
+              Sozlesmeleri Ac
+            </Link>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <div className="rounded-lg border border-border bg-background p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-foreground/45">Sozlesme</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{contracts.length}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-background p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-foreground/45">Proje</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{projects.length}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-background p-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-foreground/45">Kurulum Isi</p>
+              <p className="mt-2 text-2xl font-semibold text-foreground">{installationTasks.length}</p>
+            </div>
+          </div>
+        </div>
         <ServiceGroup baseHref="/admin/services" lookup={lookup} services={todayServices} title="Bugün Açılanlar" />
         <ServiceGroup baseHref="/admin/services" lookup={lookup} services={awaiting} title="Onay Bekleyenler" />
         <ServiceGroup baseHref="/admin/services" lookup={lookup} services={urgent} title="Acil Servisler" />

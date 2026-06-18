@@ -10,7 +10,7 @@ export default async function AdminNewServicePage({
 }) {
   const { supabase } = await requireAdmin();
   const { error } = await searchParams;
-  const [products, types, members, subcontractors, regions, catalogItems, customerSites] = await Promise.all([
+  const [products, types, members, subcontractors, regions, catalogItems, customerSites, contracts, contractSites, projects] = await Promise.all([
     supabase.from("product_groups").select("*").eq("is_active", true).order("name"),
     supabase.from("service_types").select("*").eq("is_active", true).order("name"),
     supabase.from("profiles").select("*").eq("is_active", true).order("full_name"),
@@ -18,6 +18,9 @@ export default async function AdminNewServicePage({
     supabase.from("regions").select("*").eq("is_active", true).order("name"),
     supabase.from("catalog_items").select("*").eq("is_active", true).order("name"),
     supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
+    supabase.from("contracts").select("*").order("created_at", { ascending: false }),
+    supabase.from("contract_sites").select("*").order("created_at", { ascending: false }),
+    supabase.from("projects").select("*").order("created_at", { ascending: false }),
   ]);
 
   return (
@@ -35,7 +38,10 @@ export default async function AdminNewServicePage({
         products={products.data ?? []}
         catalogItems={catalogItems.data ?? []}
         customerSites={customerSites.data ?? []}
+        contracts={contracts.data ?? []}
+        contractSites={contractSites.data ?? []}
         regions={regions.data ?? []}
+        projects={projects.data ?? []}
         role="admin"
         serviceTypes={types.data ?? []}
         subcontractors={subcontractors.data ?? []}

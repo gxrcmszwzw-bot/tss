@@ -86,6 +86,7 @@ export default async function AdminContractDetailPage({
         contractProducts={contractProductsResult.data ?? []}
         contractSites={contractSitesResult.data ?? []}
         customerSites={customerSitesResult.data ?? []}
+        installationTasks={installationTasksResult.data ?? []}
         members={membersResult.data ?? []}
         phases={phases}
         projects={projectsResult.data ?? []}

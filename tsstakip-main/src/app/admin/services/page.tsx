@@ -22,7 +22,7 @@ import { createLookup } from "@/lib/data";
 export default async function AdminServicesPage() {
   const defaults = buildNextCutoffDefaults();
   const { supabase } = await requireAdmin();
-  const [servicesResult, productsResult, typesResult, membersResult, subcontractorsResult, payoutBatchesResult, regionsResult, catalogItemsResult, customerSitesResult] =
+  const [servicesResult, productsResult, typesResult, membersResult, subcontractorsResult, payoutBatchesResult, regionsResult, catalogItemsResult, customerSitesResult, contractsResult, contractSitesResult, projectsResult] =
     await Promise.all([
       supabase.from("services").select("*").order("created_at", { ascending: false }),
       supabase.from("product_groups").select("*").order("name"),
@@ -33,6 +33,9 @@ export default async function AdminServicesPage() {
       supabase.from("regions").select("*").order("name"),
       supabase.from("catalog_items").select("*").order("name"),
       supabase.from("customer_sites").select("*").eq("is_active", true).order("site_code"),
+      supabase.from("contracts").select("*").order("created_at", { ascending: false }),
+      supabase.from("contract_sites").select("*").order("created_at", { ascending: false }),
+      supabase.from("projects").select("*").order("created_at", { ascending: false }),
     ]);
   const lookup = createLookup({
     products: productsResult.data,
@@ -73,8 +76,11 @@ export default async function AdminServicesPage() {
               buttonLabel="Yeni Servis"
               catalogItems={catalogItemsResult.data ?? []}
               customerSites={customerSitesResult.data ?? []}
+              contracts={contractsResult.data ?? []}
+              contractSites={contractSitesResult.data ?? []}
               members={membersResult.data ?? []}
               products={productsResult.data ?? []}
+              projects={projectsResult.data ?? []}
               regions={regionsResult.data ?? []}
               role="admin"
               serviceTypes={typesResult.data ?? []}

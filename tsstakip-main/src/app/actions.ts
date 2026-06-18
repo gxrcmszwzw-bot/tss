@@ -208,6 +208,66 @@ async function syncPrimaryContractSite(input: {
     });
 }
 
+async function resolveProjectContractLink(input: {
+  supabase: Awaited<ReturnType<typeof requireProfile>>["supabase"];
+  projectId: string | null;
+  contractId: string | null;
+}) {
+  if (!input.projectId) {
+    return {
+      projectId: null,
+      contractId: input.contractId,
+    };
+  }
+
+  const { data, error } = await input.supabase
+    .from("projects")
+    .select("id, contract_id")
+    .eq("id", input.projectId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    return {
+      projectId: null,
+      contractId: input.contractId,
+    };
+  }
+
+  return {
+    projectId: data.id,
+    contractId: data.contract_id ?? input.contractId,
+  };
+}
+
+async function resolveServiceContractSiteLink(input: {
+  supabase: Awaited<ReturnType<typeof requireProfile>>["supabase"];
+  contractId: string | null;
+  contractSiteId: string | null;
+  customerSiteId: string | null;
+}) {
+  if (input.contractSiteId) return input.contractSiteId;
+  if (!input.contractId || !input.customerSiteId) return null;
+
+  const { data, error } = await input.supabase
+    .from("contract_sites")
+    .select("id")
+    .eq("contract_id", input.contractId)
+    .eq("site_id", input.customerSiteId)
+    .order("is_primary", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data?.id ?? null;
+}
+
 function matchHeader(record: Record<string, unknown>, candidates: string[]) {
   const entries = Object.entries(record);
   const candidateKeys = candidates.map((candidate) => normalizeLocationKey(candidate));
@@ -322,6 +382,19 @@ export async function createServiceAction(formData: FormData) {
   const customerSite = await getCustomerSiteSnapshot(activeOrganizationId, customerSiteId);
   const cityCode = text(formData, "city_code") ?? customerSite?.city_code ?? null;
   const regionId = await ensureRegionForCityCode(activeOrganizationId, cityCode);
+  const requestedContractId = text(formData, "contract_id");
+  const requestedProjectId = text(formData, "project_id");
+  const projectLink = await resolveProjectContractLink({
+    supabase,
+    projectId: requestedProjectId,
+    contractId: requestedContractId,
+  });
+  const contractSiteId = await resolveServiceContractSiteLink({
+    supabase,
+    contractId: projectLink.contractId,
+    contractSiteId: text(formData, "contract_site_id"),
+    customerSiteId,
+  });
   const catalogItemIds = textList(formData, "catalog_item_ids");
   const catalogItemId = catalogItemIds[0] ?? null;
   const assignment = await teamFields(supabase, teamType, text(formData, "subcontractor_id"));
@@ -341,6 +414,9 @@ export async function createServiceAction(formData: FormData) {
       district: customerSite?.district_name ?? text(formData, "district"),
       site_id: customerSite?.site_code ?? text(formData, "site_id") ?? "",
       customer_site_id: customerSiteId,
+      contract_id: projectLink.contractId,
+      project_id: projectLink.projectId,
+      contract_site_id: contractSiteId,
       project_name: customerSite?.project_name ?? text(formData, "project_name"),
       product_group_id: text(formData, "product_group_id"),
       service_type_id: text(formData, "service_type_id"),
@@ -396,6 +472,19 @@ export async function updateServiceAction(formData: FormData) {
   const customerSite = await getCustomerSiteSnapshot(activeOrganizationId, customerSiteId);
   const cityCode = text(formData, "city_code") ?? customerSite?.city_code ?? null;
   const regionId = activeOrganizationId ? await ensureRegionForCityCode(activeOrganizationId, cityCode) : null;
+  const requestedContractId = text(formData, "contract_id");
+  const requestedProjectId = text(formData, "project_id");
+  const projectLink = await resolveProjectContractLink({
+    supabase,
+    projectId: requestedProjectId,
+    contractId: requestedContractId,
+  });
+  const contractSiteId = await resolveServiceContractSiteLink({
+    supabase,
+    contractId: projectLink.contractId,
+    contractSiteId: text(formData, "contract_site_id"),
+    customerSiteId,
+  });
   const catalogItemIds = textList(formData, "catalog_item_ids");
   const catalogItemId = catalogItemIds[0] ?? null;
   const assignment = await teamFields(supabase, teamType, text(formData, "subcontractor_id"));
@@ -414,6 +503,9 @@ export async function updateServiceAction(formData: FormData) {
       district: customerSite?.district_name ?? text(formData, "district"),
       site_id: customerSite?.site_code ?? text(formData, "site_id") ?? "",
       customer_site_id: customerSiteId,
+      contract_id: projectLink.contractId,
+      project_id: projectLink.projectId,
+      contract_site_id: contractSiteId,
       project_name: customerSite?.project_name ?? text(formData, "project_name"),
       product_group_id: text(formData, "product_group_id"),
       service_type_id: text(formData, "service_type_id"),

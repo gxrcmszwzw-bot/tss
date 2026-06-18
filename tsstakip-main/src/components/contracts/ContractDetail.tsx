@@ -1,10 +1,12 @@
 import { createProjectAction } from "@/app/actions";
+import { InstallationBoard } from "@/components/contracts/InstallationBoard";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type {
   Contract,
   ContractProduct,
   ContractSite,
   CustomerSite,
+  InstallationTask,
   Profile,
   Project,
   ProjectPhase,
@@ -28,6 +30,7 @@ export function ContractDetail({
   members,
   projects,
   phases,
+  installationTasks,
   services,
   summary,
 }: {
@@ -39,6 +42,7 @@ export function ContractDetail({
   members: Profile[];
   projects: Project[];
   phases: ProjectPhase[];
+  installationTasks: InstallationTask[];
   services: Service[];
   summary: ContractDetailSummary;
 }) {
@@ -145,6 +149,16 @@ export function ContractDetail({
             )}
           </div>
           <div className="rounded-xl border border-border bg-panel p-4">
+            <h2 className="text-lg font-semibold">Kurulum Panosu</h2>
+            <div className="mt-4">
+              <InstallationBoard
+                customerSites={customerSites}
+                installationTasks={installationTasks}
+                phases={phases}
+              />
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-panel p-4">
             <h2 className="text-lg font-semibold">Yeni Proje Ekle</h2>
             <form action={createProjectAction} className="mt-4 grid gap-3 md:grid-cols-2">
               <input name="contract_id" type="hidden" value={contract.id} />
@@ -193,6 +207,14 @@ export function ContractDetail({
                   </div>
                   <p className="mt-1 text-sm text-foreground/70">{service.customer_name}</p>
                   <p className="mt-1 text-xs text-foreground/55">{service.address}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <a
+                      className="inline-flex items-center justify-center rounded-lg border border-border bg-panel px-3 py-2 text-xs font-semibold text-foreground hover:border-accent/40 hover:text-accent"
+                      href={`/admin/services/${service.id}`}
+                    >
+                      Servisi Ac
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>

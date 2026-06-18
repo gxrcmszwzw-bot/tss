@@ -189,6 +189,25 @@ async function getCustomerSiteSnapshot(
   return data as Database["public"]["Tables"]["customer_sites"]["Row"] | null;
 }
 
+async function syncPrimaryContractSite(input: {
+  supabase: Awaited<ReturnType<typeof requireAdmin>>["supabase"];
+  contractId: string;
+  siteId: string | null;
+}) {
+  if (!input.siteId) return;
+
+  await input.supabase
+    .from("contract_sites")
+    .upsert({
+      contract_id: input.contractId,
+      site_id: input.siteId,
+      role: "installation_site",
+      is_primary: true,
+    }, {
+      onConflict: "contract_id,site_id,role",
+    });
+}
+
 function matchHeader(record: Record<string, unknown>, candidates: string[]) {
   const entries = Object.entries(record);
   const candidateKeys = candidates.map((candidate) => normalizeLocationKey(candidate));
@@ -771,6 +790,120 @@ export async function deleteSubcontractorAction(formData: FormData) {
   if (!id) return;
   await supabase.from("subcontractors").delete().eq("id", id);
   revalidatePath("/admin/settings");
+}
+
+export async function createContractAction(formData: FormData) {
+  const { supabase, activeOrganizationId } = await requireAdmin();
+  if (!activeOrganizationId) return;
+
+  const { data, error } = await supabase
+    .from("contracts")
+    .insert({
+      organization_id: activeOrganizationId,
+      contract_no: text(formData, "contract_no") ?? "",
+      contract_type: text(formData, "contract_type") ?? "",
+      customer_name: text(formData, "customer_name") ?? "",
+      primary_site_id: text(formData, "primary_site_id"),
+      technical_owner_id: text(formData, "technical_owner_id"),
+      commercial_owner_id: text(formData, "commercial_owner_id"),
+      start_date: dateOnly(text(formData, "start_date")),
+      end_date: dateOnly(text(formData, "end_date")),
+      renewal_date: dateOnly(text(formData, "renewal_date")),
+      status: text(formData, "status") ?? "draft",
+      lifecycle_stage: text(formData, "lifecycle_stage") ?? "draft",
+      summary: text(formData, "summary"),
+      notes: text(formData, "notes"),
+    })
+    .select("id,primary_site_id")
+    .single();
+
+  if (error || !data) {
+    redirect(`/admin/contracts?error=${encodeURIComponent(error?.message ?? "Sozlesme olusturulamadi.")}`);
+  }
+
+  await syncPrimaryContractSite({
+    supabase,
+    contractId: data.id,
+    siteId: data.primary_site_id,
+  });
+
+  const moduleKeys = textList(formData, "module_keys");
+  if (moduleKeys.length > 0) {
+    await supabase.from("contract_modules").upsert(
+      moduleKeys.map((moduleKey) => ({
+        contract_id: data.id,
+        module_key: moduleKey,
+        is_enabled: true,
+      })),
+      { onConflict: "contract_id,module_key" },
+    );
+  }
+
+  revalidatePath("/admin/contracts");
+  redirect(`/admin/contracts/${data.id}`);
+}
+
+export async function updateContractAction(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const id = text(formData, "id");
+  if (!id) return;
+
+  const primarySiteId = text(formData, "primary_site_id");
+  const { error } = await supabase
+    .from("contracts")
+    .update({
+      contract_no: text(formData, "contract_no") ?? "",
+      contract_type: text(formData, "contract_type") ?? "",
+      customer_name: text(formData, "customer_name") ?? "",
+      primary_site_id: primarySiteId,
+      technical_owner_id: text(formData, "technical_owner_id"),
+      commercial_owner_id: text(formData, "commercial_owner_id"),
+      start_date: dateOnly(text(formData, "start_date")),
+      end_date: dateOnly(text(formData, "end_date")),
+      renewal_date: dateOnly(text(formData, "renewal_date")),
+      status: text(formData, "status") ?? "draft",
+      lifecycle_stage: text(formData, "lifecycle_stage") ?? "draft",
+      summary: text(formData, "summary"),
+      notes: text(formData, "notes"),
+    })
+    .eq("id", id);
+
+  if (error) {
+    redirect(`/admin/contracts/${id}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  await syncPrimaryContractSite({
+    supabase,
+    contractId: id,
+    siteId: primarySiteId,
+  });
+
+  revalidatePath("/admin/contracts");
+  revalidatePath(`/admin/contracts/${id}`);
+}
+
+export async function createProjectAction(formData: FormData) {
+  const { supabase } = await requireAdmin();
+  const contractId = text(formData, "contract_id");
+  if (!contractId) return;
+
+  const { error } = await supabase
+    .from("projects")
+    .insert({
+      contract_id: contractId,
+      name: text(formData, "name") ?? "",
+      status: text(formData, "status") ?? "planned",
+      planned_start_at: dateTime(text(formData, "planned_start_at")),
+      planned_end_at: dateTime(text(formData, "planned_end_at")),
+      project_manager_id: text(formData, "project_manager_id"),
+      notes: text(formData, "notes"),
+    });
+
+  if (error) {
+    redirect(`/admin/contracts/${contractId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/admin/contracts/${contractId}`);
 }
 
 export async function createCatalogItemAction(formData: FormData) {
